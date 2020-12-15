@@ -8,12 +8,13 @@ xlsx_write_path = r"Data\FaceTracker\preprocessed\xlsx\\"
 csv_read_path = r"Data\FaceTracker\raw\csv"
 csv_write_path = r"Data\FaceTracker\preprocessed\csv\\"
 
-xlsx_list = os.listdir(xlsx_read_path)
-number_of_xlsx_files = len(xlsx_list)
-csv_list = os.listdir(csv_read_path)
-number_of_csv_files = len(csv_list)
 
 if __name__ == "__main__":
+
+    xlsx_list = os.listdir(xlsx_read_path)
+    number_of_xlsx_files = len(xlsx_list)
+    csv_list = os.listdir(csv_read_path)
+    number_of_csv_files = len(csv_list)
 
     for csv in csv_list:
         df = pd.read_csv(csv_read_path + "/" + csv)
