@@ -50,8 +50,8 @@ def load_network(net: nn.Module, net_path):
 
 # Hyperparameters
 num_epochs = 4
-train_batch_size = 1
-test_batch_size = 1
+train_batch_size = 5
+test_batch_size = 5
 learning_rate = 1e-3
 
 # input_size = ?
@@ -123,7 +123,6 @@ if __name__ == "__main__":
     hRt => auch 512 
     """
 
-
     class Encoder(nn.Module):
         def __init__(self, input_size: int, hidden_size: int):
             super(Encoder, self).__init__()
@@ -173,8 +172,10 @@ if __name__ == "__main__":
 
 
     class RecurrentGenerator(nn.Module):
-        def __init__(self, input_size=15, hidden_size=512):
+        def __init__(self, input_size, hidden_size):
             super(RecurrentGenerator, self).__init__()
+            self.input_size = input_size
+            self.hidden_size = hidden_size
             pass
 
         def forward(self, x):
@@ -185,17 +186,47 @@ if __name__ == "__main__":
         def __init__(self, feature_size: int):
             super(TransitionNetwork, self).__init__()
             self.feature_size = feature_size
+            self.frame_encoder = Encoder(feature_size, 256)
+            self.target_encoder = Encoder(feature_size, 128)
+            self.offset_encoder = Encoder(feature_size, 128)
 
-        def forward(self, x):
-            pass
+            self.feature_encoder = Encoder(512, 256)
+
+            self.lstm = RecurrentGenerator(256, 256)
+            self.decoder = FrameDecoder(256, 128, 64, 15)
+
+            self.count = 0
+
+
+        def forward(self, xt, t):
+            """
+            :param xt: current frame
+            :param t: target
+            :return: next frame
+            """
+
+            print(f"xt[0]: {xt.size()}")
+            print(f"t[0]: {t.size()}")
+            # calculate offset:
+            ot = torch.subtract(xt, t)
+
+            print(f"forward (Transition Network) ot: {ot}")
+
+            h_t = self.frame_encoder(xt)
+            h_o = self.offset_encoder(ot)
+            t = self.target_encoder(t)
+
+            self.count += 1
+
+            return self.count
 
 
     # Testing stuff:
 
     # Transition Network
-    model = TransitionNetwork(15)
+    MyModel = TransitionNetwork(15)
 
-    for data in trainloader:
+    for index, data in enumerate(trainloader, 0):
         batch_features, lengths, names = data
 
         print(f"before model - batch_features.size()", batch_features.size())
@@ -204,8 +235,32 @@ if __name__ == "__main__":
         print(f"before model - names: {names}")
         # for batch_idx in batch_features:
         #     print("batch_idx", batch_idx.size())
+        # batch is: [batch_size, sequence_length, feature_size]
+        # calculate current frame, offset and target
+
+        print(f"++++++++++++++++++++++++++++++ index: {index} +++++++++++++++++++++++++++++++++")
+
+        # targets for both batches
+        target = torch.empty(train_batch_size, batch_features.size(2))
+        for i in range(train_batch_size):
+            target[i] = batch_features[i][lengths[i]-1][:]
+
+        print(f"before model - target.size(): {target.size()}")
+        print(f"before model - target: {target}")
+        print()
+        print("PER FRAME CALCULATIONS")
         print()
 
+        for frame in range(lengths[0]):
+            try:
+                print(f"====================> frame: {count}")
+            except:
+                print(f"====================> frame: 0")
+            count = MyModel.forward(batch_features[:, frame, :], target)
+            print(f"----------------------- new frame ----------------------")
+
+        # just on batch for now!!!
+        break
 
 
 
