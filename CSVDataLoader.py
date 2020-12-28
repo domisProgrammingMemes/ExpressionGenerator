@@ -110,7 +110,7 @@ class PadSequencer:
         sorted_data = sorted(data, key=lambda x: x[0].shape[0], reverse=True)
         sequences = [x[0] for x in sorted_data]
         sequences_padded = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=True)
-        lengths = torch.IntTensor([len(x) for x in sequences])
+        lengths = torch.LongTensor([len(x) for x in sequences])
         names = [x[1] for x in sorted_data]
         return sequences_padded, lengths, names
 
