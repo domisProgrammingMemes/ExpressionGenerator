@@ -50,8 +50,8 @@ def load_network(net: nn.Module, net_path):
 
 # Hyperparameters
 num_epochs = 4
-train_batch_size = 4
-test_batch_size = 4
+train_batch_size = 1
+test_batch_size = 1
 learning_rate = 1e-3
 
 # input_size = ?
@@ -59,6 +59,8 @@ learning_rate = 1e-3
 
 # evtl quatsch
 transforms = transforms.ToTensor()
+
+torch.manual_seed(0)
 
 if __name__ == "__main__":
 
@@ -68,8 +70,8 @@ if __name__ == "__main__":
     # test_before_loader, _ = dataset[0]
     # print("test_before_loader.type():", test_before_loader.type())
 
-    trainloader = DataLoader(dataset=trainset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0)
-    testloader = DataLoader(dataset=testset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0)
+    trainloader = DataLoader(dataset=trainset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=False)
+    testloader = DataLoader(dataset=testset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=False)
 
 
     """
@@ -173,11 +175,13 @@ if __name__ == "__main__":
     class RecurrentGenerator(nn.Module):
         def __init__(self, input_size=15, hidden_size=512):
             super(RecurrentGenerator, self).__init__()
+            self.input_size = input_size
+            self.hidden_size = hidden_size
             self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
 
         def forward(self, x):
             out, _ = self.lstm(x)
-            # print(f"within LSTM-Class - out: {out}")
+            # print(f"forward (Recurrent Generator)  - out[0].size: {out[0].size()}")
             return out
 
     # TODO: this class needs work as several changes need to be made:
@@ -189,16 +193,25 @@ if __name__ == "__main__":
         def __init__(self, feature_size: int):
             super(TransitionNetwork, self).__init__()
             self.feature_size = feature_size
+
+            # parameters
+            self.t = None
+            self.o = None
+            self.one_output = None
+
             # for parameter tuning
             # self.frame_encoder_size = frame_encoder_size
             # self.target_encoder_size = target_encoder_size_size
             # self.offset_encoder_size = offset_encoder_size
+
+
             self.FrameEncoder = Encoder(feature_size, 512)
             self.TargetEncoder = Encoder(feature_size, 128)
             self.OffsetEncoder = Encoder(feature_size, 128)
 
             # self.RecurrentGenerator = RecurrentGenerator(frame_encoder_size=512, target_encoder_size=128, offset_encoder_size=128, hidden_size=512)
             self.RecurrentGenerator = RecurrentGenerator(feature_size, 512)
+            self.RecurrentGenerator2 = RecurrentGenerator(512, feature_size)
 
             self.FrameDecoder = FrameDecoder(input_size=512, hidden1_size=256, hidden2_size=128, output_size=feature_size)
 
@@ -206,21 +219,78 @@ if __name__ == "__main__":
         def forward(self, batch, lengths):
             print("forward (Transition Network) - batch.size()", batch.size())
 
-
             test = batch
             print(f"forward (Transition Network) - test1.size: {test.size()}")
             print(f"forward (Transition Network) - lengths: {lengths}")
 
+            """
+            lets get to the future context which consists of
+            (1) the target frame -> last in sequence
+            (2) difference current frame to target frame -> current - (1)
+            """
+
+            # # calculate target t
+            self.t = torch.empty(train_batch_size, self.feature_size)
+            # print(f"t.size(): {t.size()}")
+            for i in range(train_batch_size):
+                self.t[i] = batch[i, lengths[i]-1, :]
+            print(f"forward (Transition Network) - target t.size(): {self.t.size()}")
+            # print(f"forward (Transition Network) - target t: {self.t[:]}")
+            # # calculate offset o with eucledian distance
+            # o = torch.sub(frame - t)
+            # self.o = torch.sub(batch[:, , :], t)
+            try:
+                self.o = torch.sub(self.one_output, self.t)
+            except:
+                self.o = self.t
+
+            print(f"forward (Transition Network) - offset o.size(): {self.o.size()}")
+            # print(f"forward (Transition Network) - offset o: {self.o}")
+
+            # ENCODING
+
+
+
+            # RECURRENT CALCULATIONS
+
             test_pack = nn.utils.rnn.pack_padded_sequence(test, lengths, batch_first=True)
-            test_output = self.RecurrentGenerator(test_pack)
+            outputs = self.RecurrentGenerator(test_pack)
 
-            test_output, _ = nn.utils.rnn.pad_packed_sequence(test_output, batch_first=True)
+            outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True)
 
-            one_output = test_output[:, -1, :]
+            self.one_output = torch.empty(train_batch_size, 512)
+            # print(f"one output as tensor of shape batch: {one_output.size()}")
 
-            return test_output, one_output
+            for i in range(len(lengths)):
+                self.one_output[i] = outputs[i, lengths[i] - 1, :]
 
+            # DECODING
 
+            test_pack = nn.utils.rnn.pack_padded_sequence(outputs, lengths, batch_first=True)
+            outputs = self.RecurrentGenerator2(test_pack)
+
+            outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True)
+
+            self.one_output = torch.empty(train_batch_size, self.feature_size)
+            # print(f"one output as tensor of shape batch: {one_output.size()}")
+
+            for i in range(len(lengths)):
+                self.one_output[i] = outputs[i, lengths[i] - 1, :]
+
+            # print(f"forward (Transition Network) - test output.size(): {outputs.size()}")
+            # print(f"forward (Transition Network) - test output: {outputs[1][-1][:]}")
+            # print("+++++++++++++++++++++++++++")
+            # print(f"forward (Transition Network) - one output.size(): {self.one_output.size()}")
+            # print(f"forward (Transition Network) - one output: {self.one_output[1][:]}")
+
+            """
+            I think I only need the last LSTM output as I only want 1 frame at a time
+            one_output always considers the last frame of the sequence with the code above!
+            -> one_output [batch_size, hidden_size]
+            """
+            print()
+
+            return outputs, self.one_output
 
 
     # Testing stuff:
@@ -228,22 +298,25 @@ if __name__ == "__main__":
     # Transition Network
     model = TransitionNetwork(15)
 
-
     for data in trainloader:
         batch_features, lengths, names = data
 
-        # print("batch_features.size()", batch_features.size())
-        # print("batch_features[0].size()", batch_features[0].size())
-        # print("lengths:", lengths)
-        # print("names:", names)
+        print(f"before model - batch_features.size()", batch_features.size())
+        print(f"before model - batch_features[0].size()", batch_features[0].size())
+        print(f"before model - lengths:", lengths)
+        print(f"before model - names: {names}")
         # for batch_idx in batch_features:
         #     print("batch_idx", batch_idx.size())
+        print()
 
 
-        output, last_output = model(batch_features, lengths)
-        print(f"after model - output.size: {output.size()}")
+        all_outputs, last_output = model(batch_features, lengths)
+        print(f"after model - all_outputs.size: {all_outputs.size()}")
         print(f"after model - last_output.size: {last_output.size()}")
+        # print(f"after model - last_output[0]: {last_output[0]}")
         break
+
+
 
     # Test = CustomLSTM(512, 256, 512)
     # test_frame_encoder_output = torch.rand(4, 200, 512)
