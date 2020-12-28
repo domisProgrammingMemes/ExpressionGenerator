@@ -4,6 +4,7 @@ import os
 import os.path
 import torch
 from torch.utils.data import Dataset
+
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
@@ -76,7 +77,14 @@ class AUDataset(Dataset):
         current_sequence = self.csv_names_list[idx]
         df = pd.read_csv(self.csv_directory + "/" + current_sequence)
         csv_data = df.iloc[0:len(df), 1:].values
-        sequence_tensor = torch.tensor(csv_data, dtype=torch.float64)
+        sequence_tensor = torch.tensor(csv_data, dtype=torch.float32)
+
+        # print("in get item:", sequence_tensor.type())
+
+        # evtl quatsch
+        if self.transform is not None:
+            sequence_tensor = self.transform(sequence_tensor)
+
 
         self.all_data_tensor_list.append(sequence_tensor)
         return sequence_tensor, str(current_sequence)
@@ -87,7 +95,7 @@ class AUDataset(Dataset):
         return self.number_of_sequences
 
 
-class PadSequencer():
+class PadSequencer:
     def __call__(self, data):
         # sorted_data = sorted(data, key=len, reverse=True)
         # # print("sorted_data:", sorted_data[0].size())
@@ -102,7 +110,7 @@ class PadSequencer():
         sorted_data = sorted(data, key=lambda x: x[0].shape[0], reverse=True)
         sequences = [x[0] for x in sorted_data]
         sequences_padded = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=True)
-        lengths = torch.LongTensor([len(x) for x in sequences])
+        lengths = torch.IntTensor([len(x) for x in sequences])
         names = [x[1] for x in sorted_data]
         return sequences_padded, lengths, names
 

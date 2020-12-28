@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 
 # if I end up using normalization:
@@ -48,19 +49,24 @@ def load_network(net: nn.Module, net_path):
 
 
 # Hyperparameters
-num_epochs = 5
-train_batch_size = 2
-test_batch_size = 2
+num_epochs = 4
+train_batch_size = 4
+test_batch_size = 4
 learning_rate = 1e-3
 
 # input_size = ?
 # sequence_length = ?
 
+# evtl quatsch
+transforms = transforms.ToTensor()
 
 if __name__ == "__main__":
 
     dataset = AUDataset(csv_read_path)
     trainset, testset = torch.utils.data.random_split(dataset, [70, 15])
+
+    # test_before_loader, _ = dataset[0]
+    # print("test_before_loader.type():", test_before_loader.type())
 
     trainloader = DataLoader(dataset=trainset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0)
     testloader = DataLoader(dataset=testset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0)
@@ -115,173 +121,138 @@ if __name__ == "__main__":
     hRt => auch 512 
     """
 
-    class CustomLSTM(nn.Module):
-        def __init__(self, frame_encoder_size: int, future_context_encoder_size: int, hidden_size: int):
+
+    class Encoder(nn.Module):
+        def __init__(self, input_size: int, hidden_size: int):
+            super(Encoder, self).__init__()
+            # input to hidden 1
+            self.fc1 = nn.Linear(input_size, hidden_size)
+            self.fc2 = nn.Linear(hidden_size, hidden_size)
+
+        def forward(self, x):
             """
-            :param frame_encoder_size: size of the output of the frame encoder (expected 512)
-            :param future_context_encoder_size: size of concatenated Future Context (expected 128 + 128 = 256)
-            :param hidden_size: hidden size (expected: 512)
-            assumes that later the data has batch_first, hidden_size, encoder1_size, encoder"2"_size
+            :param x: input into the encoder which are:
+                    (1) current frame AUs
+                    (2) target frame AUs
+                    (3) offset frame AUs (difference (1) to (2)
+            :return: returns input for RecurrentGenerator
+            in case of (2) and (3) the tensors need to be concatenated
+
             """
-            super(CustomLSTM, self).__init__()
-            self.frame_encoder_size = frame_encoder_size
-            self.future_context_encoder_size = future_context_encoder_size
-            self.hidden_size = hidden_size
+            x = F.leaky_relu(self.fc1(x))
+            x = F.leaky_relu(self.fc2(x))
+            return x
 
-            # optimized!
-            self.W = nn.Parameter(torch.Tensor(frame_encoder_size, hidden_size * 4))
-            self.U = nn.Parameter(torch.Tensor(hidden_size, hidden_size * 4))
-            self.C = nn.Parameter(torch.Tensor(future_context_encoder_size, hidden_size * 4))
-            self.bias = nn.Parameter(torch.Tensor(hidden_size * 4))
+    # class TargetEncoder(nn.Module):
+    #     def __init__(self, input_size: int, hidden_size: int):
+    #         super(TargetEncoder, self).__init__()
+    #         self.fc1 = nn.Linear(input_size, hidden_size)
+    #         self.fc2 = nn.Linear(hidden_size, hidden_size)
+    #
+    #
+    # class OffsetEncoder(nn.Module):
+    #     def __init__(self,  input_size: int, hidden_size: int):
+    #         super(OffsetEncoder, self).__init__()
+    #         self.fc1 = nn.Linear(input_size, hidden_size)
+    #         self.fc2 = nn.Linear(hidden_size, hidden_size)
 
-            self.init_weights()
+    class FrameDecoder(nn.Module):
+        def __init__(self, input_size: int, hidden1_size: int, hidden2_size: int, output_size: int):
+            super(FrameDecoder, self).__init__()
+            self.fc1 = nn.Linear(input_size, hidden1_size)
+            self.fc2 = nn.Linear(hidden1_size, hidden2_size)
+            self.fc3 = nn.Linear(hidden2_size, output_size)
 
-
-            # not optimized!
-            # # i_t (1)
-            # self.W_i = nn.Parameter(torch.Tensor(frame_encoder_size, hidden_size))
-            # self.U_i = nn.Parameter(torch.Tensor(hidden_size, hidden_size))
-            # self.C_i = nn.Parameter(torch.Tensor(future_context_encoder_size, hidden_size))
-            # self.b_i = nn.Parameter(torch.Tensor(hidden_size))
-            #
-            # # o_t (2)
-            # self.W_o = nn.Parameter(torch.Tensor(frame_encoder_size, hidden_size))
-            # self.U_o = nn.Parameter(torch.Tensor(hidden_size, hidden_size))
-            # self.C_o = nn.Parameter(torch.Tensor(future_context_encoder_size, hidden_size))
-            # self.b_o = nn.Parameter(torch.Tensor(hidden_size))
-            #
-            # # f_t (3)
-            # self.W_f = nn.Parameter(torch.Tensor(frame_encoder_size, hidden_size))
-            # self.U_f = nn.Parameter(torch.Tensor(hidden_size, hidden_size))
-            # self.C_f = nn.Parameter(torch.Tensor(future_context_encoder_size, hidden_size))
-            # self.b_f = nn.Parameter(torch.Tensor(hidden_size))
-            #
-            # # c_t (5)
-            # self.W_c = nn.Parameter(torch.Tensor(frame_encoder_size, hidden_size))
-            # self.U_c = nn.Parameter(torch.Tensor(hidden_size, hidden_size))
-            # self.C_c = nn.Parameter(torch.Tensor(future_context_encoder_size, hidden_size))
-            # self.b_c = nn.Parameter(torch.Tensor(hidden_size))
-
-
-        def init_weights(self):
-            stdv = 1.0 / math.sqrt(self.hidden_size)
-            for weight in self.parameters():
-                weight.data.uniform_(-stdv, stdv)
-
-
-        def forward(self, hEt, hFOt, init_states=None):
-            """
-            :param hEt:
-            :param hFOt:
-            :param init_states:
-            :return:
-
-            assumes hEt.shape represents (batch_size, sequence_length, frame_encoder_size,
-            assumes hFOt.shape represents (batch_size, sequence_length, future_context_encoder_size
-            """
-
-            batch_size, sequence_length, _ = hEt.size()
-            # batch_size, sequence_length, _ = hFOt.size()
-            hidden_sequence = []
-
-            if init_states is None:
-                h_t, c_t = (
-                    torch.zeros(batch_size, self.hidden_size).to(device=hEt.device),    # to(hEt.device) means same device as hEt I think
-                    torch.zeros(batch_size, self.hidden_size).to(device=hFOt.device),   # to make sure devices are all the same!
-                )
-            else:
-                h_t, c_t = init_states
-
-
-            # optimized!
-            HS = self.hidden_size
-            for t in range(sequence_length):
-                hE_t = hEt[:, t, :]
-                hFO_t = hFOt[:, t, :]
-
-                # batch the computations into a single matrix multiplication
-                gates = hE_t @ self.W + h_t @ self.U + hFO_t @ self.C + self.bias
-                i_t, f_t, g_t, o_t = (
-                    torch.sigmoid(gates[:, :HS]),       # input
-                    torch.sigmoid(gates[:, HS:HS*2]),   # forget
-                    torch.tanh(gates[:, HS*2:HS*3]),
-                    torch.sigmoid((gates[:, HS*3:])),   # output
-                )
-
-                c_t = f_t * c_t + i_t * g_t
-                h_t = o_t * torch.tanh(c_t)
-                hidden_sequence.append(h_t.unsqueeze(0))
-
-            hidden_sequence = torch.cat(hidden_sequence, dim=0)
-            # reshape from shape (sequence, batch, feature) to (batch, sequence, feature)
-            hidden_sequence = hidden_sequence.transpose(0, 1).contiguous()
-            return hidden_sequence, (h_t, c_t)
-
-
-            # not optimized!
-            # for t in range(sequence_length):
-            #     hE_t = hEt[:, t, :]
-            #     hFO_t = hFOt[:, t, :]
-            #
-            #     i_t = torch.sigmoid(hE_t @ self.W_i + h_t @ self.U_i + hFO_t @ self.C_i + self.b_i)
-            #     o_t = torch.sigmoid(hE_t @ self.W_o + h_t @ self.U_o + hFO_t @ self.C_o + self.b_o)
-            #     f_t = torch.sigmoid(hE_t @ self.W_f + h_t @ self.U_f + hFO_t @ self.C_f + self.b_f)
-            #     g_t = torch.tanh(hE_t @ self.W_c + h_t @ self.U_c + hFO_t @ self.C_c + self.b_c)
-            #
-            #     c_t = f_t * c_t + i_t * g_t
-            #     h_t = o_t * torch.tanh(c_t)
-            #
-            #     hidden_sequence.append(h_t.unsqueeze(0))
-            #
-            # # reshape hidden sequence p/ retornar
-            # hidden_sequence = torch.cat(hidden_sequence, dim=0)
-            # hidden_sequence = hidden_sequence.transpose(0, 1).contiguous()
-            # return hidden_sequence, (h_t, c_t)
-
-
-
-
-
-    Test = CustomLSTM(512, 256, 512)
-    test_frame_encoder_output = torch.rand(4, 200, 512)
-    test_future_context_encoder_output = torch.rand(4, 200, 256)
-
-    output, (h, c) = Test(test_frame_encoder_output, test_future_context_encoder_output)
-    print(output.size())
-    print(h.size())
-    print(c.size())
-
-
-
-    class FrameEncoder(nn.Module):
-        def __init__(self):
-            super(FrameEncoder, self).__init__()
-            pass
-
-
-    class TargetEncoder(nn.Module):
-        def __init__(self):
-            super(TargetEncoder, self).__init__()
-            pass
-
-
-    class OffsetEncoder(nn.Module):
-        def __init__(self):
-            super(OffsetEncoder, self).__init__()
-            pass
+        def forward(self, x):
+            x = F.leaky_relu(self.fc1(x))
+            x = F.leaky_relu(self.fc2(x))
+            x = F.leaky_relu(self.fc3(x))
+            return x
 
 
     class RecurrentGenerator(nn.Module):
-        def __init__(self):
+        def __init__(self, input_size=15, hidden_size=512):
             super(RecurrentGenerator, self).__init__()
-            pass
+            self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
+
+        def forward(self, x):
+            out, _ = self.lstm(x)
+            # print(f"within LSTM-Class - out: {out}")
+            return out
+
+    # TODO: this class needs work as several changes need to be made:
+    #  1: rearrange the overall network so the LSTM gets (padded) Sequences as input (just 1 Input)
+    #  2: reimplement the encoder structure so that (1) is possible
+    #  Overall: Use standard LSTM-Module; use FutureContext + Frame as Input for LSTM; Padding maybe in forward-method of Network?
+    #  p.s. maybe use LSTM as encoder?
+    class TransitionNetwork(nn.Module):
+        def __init__(self, feature_size: int):
+            super(TransitionNetwork, self).__init__()
+            self.feature_size = feature_size
+            # for parameter tuning
+            # self.frame_encoder_size = frame_encoder_size
+            # self.target_encoder_size = target_encoder_size_size
+            # self.offset_encoder_size = offset_encoder_size
+            self.FrameEncoder = Encoder(feature_size, 512)
+            self.TargetEncoder = Encoder(feature_size, 128)
+            self.OffsetEncoder = Encoder(feature_size, 128)
+
+            # self.RecurrentGenerator = RecurrentGenerator(frame_encoder_size=512, target_encoder_size=128, offset_encoder_size=128, hidden_size=512)
+            self.RecurrentGenerator = RecurrentGenerator(feature_size, 512)
+
+            self.FrameDecoder = FrameDecoder(input_size=512, hidden1_size=256, hidden2_size=128, output_size=feature_size)
 
 
-    class FrameDecoder(nn.Module):
-        def __init__(self):
-            super(FrameDecoder, self).__init__()
-            pass
+        def forward(self, batch, lengths):
+            print("forward (Transition Network) - batch.size()", batch.size())
 
+
+            test = batch
+            print(f"forward (Transition Network) - test1.size: {test.size()}")
+            print(f"forward (Transition Network) - lengths: {lengths}")
+
+            test_pack = nn.utils.rnn.pack_padded_sequence(test, lengths, batch_first=True)
+            test_output = self.RecurrentGenerator(test_pack)
+
+            test_output, _ = nn.utils.rnn.pad_packed_sequence(test_output, batch_first=True)
+
+            one_output = test_output[:, -1, :]
+
+            return test_output, one_output
+
+
+
+
+    # Testing stuff:
+
+    # Transition Network
+    model = TransitionNetwork(15)
+
+
+    for data in trainloader:
+        batch_features, lengths, names = data
+
+        # print("batch_features.size()", batch_features.size())
+        # print("batch_features[0].size()", batch_features[0].size())
+        # print("lengths:", lengths)
+        # print("names:", names)
+        # for batch_idx in batch_features:
+        #     print("batch_idx", batch_idx.size())
+
+
+        output, last_output = model(batch_features, lengths)
+        print(f"after model - output.size: {output.size()}")
+        print(f"after model - last_output.size: {last_output.size()}")
+        break
+
+    # Test = CustomLSTM(512, 256, 512)
+    # test_frame_encoder_output = torch.rand(4, 200, 512)
+    # test_future_context_encoder_output = torch.rand(4, 200, 256)
+    #
+    # output, (h, c) = Test(test_frame_encoder_output, test_future_context_encoder_output)
+    # print(output.size())
+    # print(h.size())
+    # print(c.size())
 
 
     # just some testing again :)
@@ -301,21 +272,35 @@ if __name__ == "__main__":
 
     # MORE TESTING :D
     # for batch_idx, (sequences, lengths, names) in enumerate(trainloader):
-    #     if batch_idx > 1:
+    #     if batch_idx > 0:
     #         break
-    #     print(f"name: {names[0]}")
-    #     print(f"length: {lengths[0]}")
-    #     print(f"first sequence: {sequences[0]}")
-    #     print(f"sequence size: {sequences[0].size()}")
-    #     print()
-    #     print(f"name: {names[1]}")
-    #     print(f"length: {lengths[1]}")
-    #     print(f"second sequence: {sequences[1]}")
-    #     print(f"sequence size (which should be as long as the first sequence: {sequences[1].size()}")
-    #     print(f"second sequence last real tensor: {sequences[1][lengths[1]-1]}")
+    #     print(f"sequenzes.size(): {sequences.size()}")
+    #     print(f"length-tensor: {lengths}")
     #
-    #     # prints above seem to print out correct stuff!
-    #     # TODO: TransitionNetwork implementation!
+    #     for i in range(test_batch_size):
+    #         print(f"name: {names[i]}")
+    #         print(f"length: {lengths[i]}")
+    #         print(f"first sequence: {sequences[i]}")
+    #         print(f"sequence size: {sequences[i].size()}")
+    #         print()
+    #         print(f"first frame AUs: {sequences[i][0]}")
+    #         print(f"last frame AUs: {sequences[i][lengths[i]-1]}")
+    #         print(f"difference first to last frame: {torch.sub(sequences[i][0], sequences[i][lengths[i]-1])}")
+    #         break
+
+
+        # print(f"name: {names[0]}")
+        # print(f"length: {lengths[0]}")
+        # print(f"first sequence: {sequences[0]}")
+        # print(f"sequence size: {sequences[0].size()}")
+        # print()
+        # print(f"name: {names[1]}")
+        # print(f"length: {lengths[1]}")
+        # print(f"second sequence: {sequences[1]}")
+        # print(f"sequence size (which should be as long as the first sequence: {sequences[1].size()}")
+        # print(f"second sequence last real tensor: {sequences[1][lengths[1]-1]}")
+
+        # prints above seem to print out correct stuff!
 
 
 
