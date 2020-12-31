@@ -275,6 +275,8 @@ if __name__ == "__main__":
         # batch is: [batch_size, sequence_length, feature_size]
         # calculate current frame, offset and target
 
+        # TODO: Tell each batch how long the sequence is so it can ignore everything after the last frame somehow?
+
         print(f"++++++++++++++++++++++++++++++ index (consists of a batch of batch_size): {index} +++++++++++++++++++++++++++++++++")
 
         # targets for all batches (hyperparams)
@@ -306,6 +308,7 @@ if __name__ == "__main__":
                 real_next_frame = batch_features[:, frame+1, :]
             else:
                 real_next_frame = target
+            print(real_next_frame)
 
 
 
