@@ -172,14 +172,25 @@ if __name__ == "__main__":
 
 
     class RecurrentGenerator(nn.Module):
-        def __init__(self, input_size, hidden_size):
+        def __init__(self, input_size, hidden_size, number_layers=1):
             super(RecurrentGenerator, self).__init__()
             self.input_size = input_size
             self.hidden_size = hidden_size
-            pass
+            self.num_layers = number_layers
+            self.lstm = nn.LSTM(input_size, hidden_size, num_layers=number_layers, batch_first=True)
 
-        def forward(self, x):
-            pass
+        def forward(self, x, h_t, c_t):
+
+            lstm_out, (h_t, c_t) = self.lstm(x, (h_t, c_t))
+
+            return lstm_out, h_t, c_t
+
+
+        def init_hidden(self):
+            h0 = torch.zeros(self.num_layers, train_batch_size, self.hidden_size)
+            c0 = torch.zeros(self.num_layers, train_batch_size, self.hidden_size)
+            return h0, c0
+
 
 
     class TransitionNetwork(nn.Module):
@@ -198,27 +209,53 @@ if __name__ == "__main__":
             self.count = 0
 
 
-        def forward(self, xt, t):
+        def forward(self, xt, t, hidden_state, cell_state):
             """
             :param xt: current frame
             :param t: target
-            :return: next frame
+            :param hidden_state: (initial) hidden states
+            :param cell_state: (initial) cell states
+            :return: next frame with all info necessary
             """
 
-            print(f"xt[0]: {xt.size()}")
-            print(f"t[0]: {t.size()}")
+            # print(f"xt[0]: {xt.size()}")
+            # print(f"t[0]: {t.size()}")
+
             # calculate offset:
             ot = torch.subtract(xt, t)
 
-            print(f"forward (Transition Network) ot: {ot}")
+            # print(f"forward (Transition Network) ot: {ot}")
 
             h_t = self.frame_encoder(xt)
             h_o = self.offset_encoder(ot)
             t = self.target_encoder(t)
 
-            self.count += 1
 
-            return self.count
+            frame_features = torch.cat((h_t, h_o, t), 1)
+            encoded_frame = self.feature_encoder(frame_features)
+
+            # print(f"forward (Transition Network) - encoded_frame.size: {encoded_frame.size()}")
+            encoded_frame = torch.unsqueeze(encoded_frame, 1)
+
+
+            # lstm out should be of length sequence_length
+            lstm_out, hidden_state, cell_state = self.lstm(encoded_frame, hidden_state, cell_state)
+
+            lstm_out = torch.squeeze(lstm_out, 1)
+
+            # print(f"forward (Transition Network) - lstm_out.size: {lstm_out.size()}")
+            # print(f"forward (Transition Network) - hidden_state.size: {hidden_state.size()}")
+            # print(f"forward (Transition Network) - cell_state.size: {cell_state.size()}")
+
+            next_frame = self.decoder(lstm_out)
+
+            return next_frame, hidden_state, cell_state
+
+
+            # self.count += 1
+            # return self.count
+
+
 
 
     # Testing stuff:
@@ -226,7 +263,7 @@ if __name__ == "__main__":
     # Transition Network
     MyModel = TransitionNetwork(15)
 
-    for index, data in enumerate(trainloader, 0):
+    for index, data in enumerate(trainloader):
         batch_features, lengths, names = data
 
         print(f"before model - batch_features.size()", batch_features.size())
@@ -238,12 +275,15 @@ if __name__ == "__main__":
         # batch is: [batch_size, sequence_length, feature_size]
         # calculate current frame, offset and target
 
-        print(f"++++++++++++++++++++++++++++++ index: {index} +++++++++++++++++++++++++++++++++")
+        print(f"++++++++++++++++++++++++++++++ index (consists of a batch of batch_size): {index} +++++++++++++++++++++++++++++++++")
 
-        # targets for both batches
+        # targets for all batches (hyperparams)
         target = torch.empty(train_batch_size, batch_features.size(2))
         for i in range(train_batch_size):
             target[i] = batch_features[i][lengths[i]-1][:]
+
+        # init hidden per batch
+        hidden, cell = MyModel.lstm.init_hidden()
 
         print(f"before model - target.size(): {target.size()}")
         print(f"before model - target: {target}")
@@ -252,12 +292,27 @@ if __name__ == "__main__":
         print()
 
         for frame in range(lengths[0]):
-            try:
-                print(f"====================> frame: {count}")
-            except:
-                print(f"====================> frame: 0")
-            count = MyModel.forward(batch_features[:, frame, :], target)
-            print(f"----------------------- new frame ----------------------")
+            # try:
+            #     print(f"====================> frame: {count}")
+            # except:
+            #     print(f"====================> frame: 0")
+            # count = MyModel.forward(batch_features[:, frame, :], target)
+            # print(f"----------------------- new frame ----------------------")
+            # print(batch_features[:, frame, :])
+            next_frame, hidden, cell = MyModel.forward(batch_features[:, frame, :], target, hidden, cell)
+
+            # target
+            if frame < (lengths[0] - 1):
+                real_next_frame = batch_features[:, frame+1, :]
+            else:
+                real_next_frame = target
+
+
+
+            # print(hidden)
+            # print(cell)
+            # print(next_frame.size())
+
 
         # just on batch for now!!!
         break
