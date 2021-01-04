@@ -131,6 +131,8 @@ if __name__ == "__main__":
 
 
     # Transition Network
+    # TODO: LSTM autoencoder; links für reference are bookmarked + further search if necessary
+
 
     for index, data in enumerate(trainloader):
         batch_features, lengths, names = data
@@ -143,8 +145,6 @@ if __name__ == "__main__":
         #     print("batch_idx", batch_idx.size())
         # batch is: [batch_size, sequence_length, feature_size]
         # calculate current frame, offset and target
-
-        # TODO: Tell each batch how long the sequence is so it can ignore everything after the last frame somehow?
 
         print(f"++++++++++++++++++++++++++++++ index (consists of a batch of batch_size): {index} +++++++++++++++++++++++++++++++++")
 
@@ -161,32 +161,6 @@ if __name__ == "__main__":
         print()
         print("PER FRAME CALCULATIONS")
         print()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
