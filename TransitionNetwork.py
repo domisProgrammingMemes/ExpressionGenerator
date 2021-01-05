@@ -1,4 +1,5 @@
 import math
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -73,9 +74,9 @@ def load_network(net: nn.Module):
 
 
 # Hyperparameters
-num_epochs = 4
-train_batch_size = 30
-test_batch_size = 30
+num_epochs = 300
+train_batch_size = 5
+test_batch_size = 5
 learning_rate = 1e-4
 
 # input_size = ?
@@ -103,14 +104,14 @@ if __name__ == "__main__":
 
 
     class Encoder(nn.Module):
-        def __init__(self, n_features: int, latent_dim: int = 4, num_layers: int = 2):
+        def __init__(self, n_features: int, latent_dim: int, num_layers: int):
             super(Encoder, self).__init__()
             self.n_features = n_features
             self.hidden_dim = latent_dim
             self.num_layers = num_layers
 
             # batch, seq_len, n_features
-            self.encoder = nn.LSTM(input_size=n_features, hidden_size=latent_dim, num_layers=2, batch_first=True)
+            self.encoder = nn.LSTM(n_features, latent_dim, num_layers=num_layers, batch_first=True)
 
 
         def forward(self, x, lengths):
@@ -118,36 +119,63 @@ if __name__ == "__main__":
             #  Wie verwende ich den Output des Encoders?
             #  Nur Hidden und Cell oder auch x -> was ist x? Die ganze Sequenz?
 
+            # TODO: only use last hidden and try things out with repeat!?
+
 
             # x is ??
             # hidden_n is last hidden state
+            # print(x.size())                   batch_size, seq_length, n_features
+
+
             x_pack = PACK(x, lengths, batch_first=True)
-            x, state = self.encoder(x_pack)
+            x, (last_hidden, _) = self.encoder(x_pack)
             x, _ = PAD(x, batch_first=True)
-            return x, state
+
+            # print("forward (Encoder) - last_hidden.size()", last_hidden.size())            # 1, batch_size, hidden_size
+
+            # last_hidden = last_hidden.repeat(x.size(0), 1, 1)
+            last_hidden = last_hidden.reshape((train_batch_size, self.hidden_dim))
+            # print("forward (Encoder) - last_hidden.size() after reshape()", last_hidden.size())            # batch_size, hidden_size
+
+            return x, last_hidden
 
 
     class Decoder(nn.Module):
-        def __init__(self, input_dim: int, output_dim: int, num_layers: int):
+        def __init__(self, n_features: int, latent_dim: int, num_layers: int):
             super(Decoder, self).__init__()
-            self.input_dim = input_dim
-            self.output_dim = output_dim
+            self.n_features = n_features
+            self.latent_dim = latent_dim
             self.num_layers = num_layers
 
-            self.decoder = nn.LSTM(input_size=input_dim, hidden_size=output_dim, num_layers=1, batch_first=True)
+            self.decoder = nn.LSTM(latent_dim, n_features, num_layers=num_layers, batch_first=True)
 
-        def forward(self, x, lengths, state):
+        def forward(self, x, lengths=0, last_hidden=0):
             # TODO: Was soll mir der Decoder zurück geben?
             #  Wie verwende ich die Inputs des Encoders?
             #  Arbeitet der Decoder Frame by Frame oder wie genau soll alles funktionieren?
+            # hidden, cell = state
+            # print(x.size())
+            # print(hidden.size())
+            # print(cell.size())
 
-            # x is ??
-            # hidden_n is last hidden state
-            # state consists of hidden_n and cell_n
-            x_pack = PACK(x, lengths, batch_first=True)
-            x, state = self.decoder(x_pack, state)
-            x, _ = PAD(x, batch_first=True)
-            return x, state
+            # print("forward (Decoder) - x.size()", x.size())
+
+            # x needs to get into shape: batch_size, seq_len, latent_dim
+            x = x.repeat(lengths[0], 1, 1)
+            # print("forward (Decoder) - x.size() after repeat", x.size())
+
+            x = x.reshape((-1, lengths[0], self.latent_dim))
+            # print("forward (Decoder) - x.size() after reshape()", x.size())
+
+            x, _ = self.decoder(x)
+
+            # # x is ??
+            # # hidden_n is last hidden state
+            # # state consists of hidden_n and cell_n
+            # x_pack = PACK(x, lengths, batch_first=True)
+            # x, state = self.decoder(x_pack, last_hidden)
+            # x, _ = PAD(x, batch_first=True)
+            return x
 
 
     class LSTMAutoencoder(nn.Module):
@@ -156,8 +184,8 @@ if __name__ == "__main__":
             self.n_features = n_features
             self.hidden_size = hidden_size
 
-            self.encoder = Encoder(n_features, latent_dim=hidden_size, num_layers=1).to(device)
-            self.decoder = Decoder(hidden_size, n_features, num_layers=1).to(device)
+            self.encoder = Encoder(n_features=n_features, latent_dim=hidden_size, num_layers=1).to(device)
+            self.decoder = Decoder(n_features=n_features, latent_dim=hidden_size, num_layers=1).to(device)
 
 
         def forward(self, x, lengths):
@@ -169,16 +197,22 @@ if __name__ == "__main__":
             #  später: Ersten + letzten Frame eingeben, ganze Sequenz ausgeben
             # x is: batch_size, seq_len, n_features
 
-            x, state = self.encoder(x, lengths)
-
-            # print("forward before decoding (LSTMAutoencoder) x.size()", x.size())
-            # print("forward before decoding (LSTMAutoencoder) hidden_n.size()", hidden_n.size())
-            # print("forward before decoding (LSTMAutoencoder) cell_n.size()", cell_n.size())
-            #
+            # print(self.encoder)
+            # print(self.decoder)
             # exit()
 
-            x, state = self.decoder(x, lengths)
-            return x, state
+            # x, state = self.encoder(x, lengths)
+            # hidden_n, cell_n = state
+
+            x, last_hidden = self.encoder(x, lengths)
+
+            # print("forward before decoding (LSTMAutoencoder) x.size()", x.size())
+            # print("forward before decoding (LSTMAutoencoder) hidden_n.size()", last_hidden.size())
+            # print("forward before decoding (LSTMAutoencoder) cell_n.size()", cell_n.size())
+
+            # x, state = self.decoder(x, lengths, state)
+            x = self.decoder(last_hidden, lengths)
+            return x
 
 
         def init_hidden(self):
@@ -193,7 +227,7 @@ if __name__ == "__main__":
     #  -https://www.youtube.com/watch?v=EoGUlvhRYpk&t=28s&ab_channel=AladdinPersson
 
 
-    model = LSTMAutoencoder(15, 7)
+    model = LSTMAutoencoder(n_features=15, hidden_size=7)
     model = model.to(device)
 
     loss_function = nn.MSELoss(reduction="sum")
@@ -212,8 +246,10 @@ if __name__ == "__main__":
                 sequences = sequences.to(device)
                 # lengths = lengths.to(device)
 
-                seq_prediction, state = model(sequences, lengths)
-                hidden, cell = state
+                # seq_prediction, state = model(sequences, lengths)
+                # hidden, cell = state
+
+                seq_prediction = model(sequences, lengths)
 
                 # print(seq_prediction.size())
                 # print(sequences.size())
@@ -222,10 +258,12 @@ if __name__ == "__main__":
                 # seq_prediction = seq_prediction.reshape(15, -1)
                 # sequences = sequences.reshape(15, -1)
 
-                print(seq_prediction.size())
-                print(sequences.size())
-                print(hidden.size())
-                print(cell.size())
+                # print(seq_prediction.size())
+                # print(sequences.size())
+
+                # print(hidden.size())
+                # print(cell.size())
+
                 # exit()
 
                 loss = loss_function(seq_prediction, sequences)
@@ -248,8 +286,8 @@ if __name__ == "__main__":
                     loss = loss_function(seq_prediction, sequences)
                     test_losses.append(loss.item())
 
-            train_loss = torch.mean(train_losses)
-            test_loss = torch.mean(test_losses)
+            train_loss = np.mean(train_losses)
+            test_loss = np.mean(test_losses)
             history["train"].append(train_loss)
             history["test"].append(test_loss)
 
@@ -257,7 +295,7 @@ if __name__ == "__main__":
 
         return model.eval(), history
 
-    trained_model, history = train_model(trainloader, testloader, 5)
+    trained_model, history = train_model(trainloader, testloader, num_epochs)
     save_network(trained_model)
 
 
