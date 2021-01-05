@@ -31,21 +31,43 @@ def set_device():
 
 
 # save a networks parameters for future use
-def save_network(net: nn.Module, path):
+def save_network(net: nn.Module):
     # save the network?
     save = input("Save net? (y) or (n)?")
     if save == "y":
+        version = input("Input the version ID (int): ")
+        try:
+            int(version)
+        except ValueError:
+            print("That is not an int Version number!")
+            save_network(net)
+
+        path = "./models/Transition_" + str(version) + "_net.pth"
         torch.save(net.state_dict(), path)
     else:
         pass
 
 
 # load an existing network's parameters and safe them into the just created net
-def load_network(net: nn.Module, net_path):
+def load_network(net: nn.Module):
     # save the network?
     load = input("Load Network? (y) or (n)?")
+
     if load == "y":
-        net.load_state_dict(torch.load(net_path))
+        version = input("Which model should be loaded? (Version number): ")
+        try:
+            int(version)
+        except ValueError:
+            print("That is not a Version number!")
+            version = input("Which model should be loaded? (Version number): ")
+
+        try:
+            path = "./models/Transition_" + str(version) + "_net.pth"
+            net.load_state_dict(torch.load(path))
+
+        except FileNotFoundError:
+            print("There is no such Version yet!")
+            load_network(net)
     else:
         pass
 
@@ -199,7 +221,7 @@ if __name__ == "__main__":
         return model.eval(), history
 
     trained_model, history = train_model(trainloader, testloader, 5)
-    save_network(trained_model, path)
+    save_network(trained_model)
 
 
 
