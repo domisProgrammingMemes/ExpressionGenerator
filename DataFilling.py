@@ -30,13 +30,13 @@ if __name__ == "__main__":
             # print(csv)
             # print(df.head(10))
 
-            df.interpolate(method="linear", inplace=True)
+            df.interpolate(method="cubic", inplace=True)
             # print(csv)
             # print(df.head(10))
             # break
 
             name, type = csv.split(sep=".")
-            csv = name + "_fill." + type
+            csv = name + "___fill." + type
 
             df.to_csv(path_or_buf=csv_write_path + csv, index=False)
 
