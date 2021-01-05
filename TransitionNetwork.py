@@ -74,8 +74,8 @@ def load_network(net: nn.Module):
 
 # Hyperparameters
 num_epochs = 4
-train_batch_size = 15
-test_batch_size = 5
+train_batch_size = 30
+test_batch_size = 30
 learning_rate = 1e-4
 
 # input_size = ?
@@ -98,8 +98,8 @@ if __name__ == "__main__":
     # test_before_loader, _ = dataset[0]
     # print("test_before_loader.type():", test_before_loader.type())
 
-    trainloader = DataLoader(dataset=trainset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=False)
-    testloader = DataLoader(dataset=testset, batch_size=test_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=False)
+    trainloader = DataLoader(dataset=trainset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=True)
+    testloader = DataLoader(dataset=testset, batch_size=test_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=True)
 
 
     class Encoder(nn.Module):
@@ -114,12 +114,17 @@ if __name__ == "__main__":
 
 
         def forward(self, x, lengths):
+            # TODO: Was soll mir der Encoder zurück geben?
+            #  Wie verwende ich den Output des Encoders?
+            #  Nur Hidden und Cell oder auch x -> was ist x? Die ganze Sequenz?
+
+
             # x is ??
             # hidden_n is last hidden state
             x_pack = PACK(x, lengths, batch_first=True)
-            x, (hidden_n, cell_n) = self.encoder(x_pack)
+            x, state = self.encoder(x_pack)
             x, _ = PAD(x, batch_first=True)
-            return x, (hidden_n, cell_n)
+            return x, state
 
 
     class Decoder(nn.Module):
@@ -131,13 +136,18 @@ if __name__ == "__main__":
 
             self.decoder = nn.LSTM(input_size=input_dim, hidden_size=output_dim, num_layers=1, batch_first=True)
 
-        def forward(self, x, lengths):
+        def forward(self, x, lengths, state):
+            # TODO: Was soll mir der Decoder zurück geben?
+            #  Wie verwende ich die Inputs des Encoders?
+            #  Arbeitet der Decoder Frame by Frame oder wie genau soll alles funktionieren?
+
             # x is ??
             # hidden_n is last hidden state
+            # state consists of hidden_n and cell_n
             x_pack = PACK(x, lengths, batch_first=True)
-            x, (hidden_n, cell_n) = self.encoder(x_pack)
+            x, state = self.decoder(x_pack, state)
             x, _ = PAD(x, batch_first=True)
-            return x, (hidden_n, cell_n)
+            return x, state
 
 
     class LSTMAutoencoder(nn.Module):
@@ -151,35 +161,48 @@ if __name__ == "__main__":
 
 
         def forward(self, x, lengths):
-            x, (hidden_n, cell_n) = self.encoder(x, lengths)
+            # TODO: Was genau ist mein x?
+            #  Wie verwende ich den Encoder?
+            #  Wie verwende ich den Decoder?
+            #  Want to:
+            #  ganze Sequenz eingeben, ganze Sequenz ausgeben
+            #  später: Ersten + letzten Frame eingeben, ganze Sequenz ausgeben
+            # x is: batch_size, seq_len, n_features
 
-            print("forward before decoding (LSTMAutoencoder) x.size()", x.size())
-            print("forward before decoding (LSTMAutoencoder) hidden_n.size()", hidden_n.size())
-            print("forward before decoding (LSTMAutoencoder) cell_n.size()", cell_n.size())
+            x, state = self.encoder(x, lengths)
 
-            exit()
+            # print("forward before decoding (LSTMAutoencoder) x.size()", x.size())
+            # print("forward before decoding (LSTMAutoencoder) hidden_n.size()", hidden_n.size())
+            # print("forward before decoding (LSTMAutoencoder) cell_n.size()", cell_n.size())
+            #
+            # exit()
 
-            x, (hidden_n, cell_n) = self.decoder(x, lengths)
-            return x, hidden_n, cell_n
+            x, state = self.decoder(x, lengths)
+            return x, state
 
 
         def init_hidden(self):
             pass
 
 
-
-
     # Transition Network
+
+    # TODO: Nachdenken!
+    #  Tutorials die vll ein wenig helfen:
+    #  -https://curiousily.com/posts/time-series-anomaly-detection-using-lstm-autoencoder-with-pytorch-in-python/
+    #  -https://www.youtube.com/watch?v=EoGUlvhRYpk&t=28s&ab_channel=AladdinPersson
+
+
     model = LSTMAutoencoder(15, 7)
     model = model.to(device)
 
     loss_function = nn.MSELoss(reduction="sum")
-    optimizer = optim.Adam(model.parameters(), learning_rate=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     def train_model(trainloader: DataLoader, testloader: DataLoader, n_Epochs: int):
         history = dict(train=[], test=[])
 
-        for epoch in range(1,n_Epochs + 1):
+        for epoch in range(1, n_Epochs + 1):
             model.train()
             train_losses = []
 
@@ -187,9 +210,23 @@ if __name__ == "__main__":
                 optimizer.zero_grad()
                 sequences, lengths, _ = data
                 sequences = sequences.to(device)
-                lengths = lengths.to(device)
+                # lengths = lengths.to(device)
 
-                seq_prediction = model(sequences, lengths)
+                seq_prediction, state = model(sequences, lengths)
+                hidden, cell = state
+
+                # print(seq_prediction.size())
+                # print(sequences.size())
+                # exit()
+
+                # seq_prediction = seq_prediction.reshape(15, -1)
+                # sequences = sequences.reshape(15, -1)
+
+                print(seq_prediction.size())
+                print(sequences.size())
+                print(hidden.size())
+                print(cell.size())
+                # exit()
 
                 loss = loss_function(seq_prediction, sequences)
 
@@ -204,7 +241,7 @@ if __name__ == "__main__":
                 for index, data in enumerate(testloader):
                     sequences, lengths, _ = data
                     sequences = sequences.to(device)
-                    lengths = lengths.to(device)
+                    # lengths = lengths.to(device)
 
                     seq_prediction = model(sequences, lengths)
 
@@ -222,10 +259,6 @@ if __name__ == "__main__":
 
     trained_model, history = train_model(trainloader, testloader, 5)
     save_network(trained_model)
-
-
-
-
 
 
 
