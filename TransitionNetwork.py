@@ -137,7 +137,7 @@ if __name__ == "__main__":
             last_hidden = last_hidden.reshape((train_batch_size, self.hidden_dim))
             # print("forward (Encoder) - last_hidden.size() after reshape()", last_hidden.size())            # batch_size, hidden_size
 
-            return x, last_hidden
+            return last_hidden
 
 
     class Decoder(nn.Module):
@@ -204,7 +204,8 @@ if __name__ == "__main__":
             # x, state = self.encoder(x, lengths)
             # hidden_n, cell_n = state
 
-            x, last_hidden = self.encoder(x, lengths)
+            # x, last_hidden = self.encoder(x, lengths)
+            last_hidden = self.encoder(x, lengths)
 
             # print("forward before decoding (LSTMAutoencoder) x.size()", x.size())
             # print("forward before decoding (LSTMAutoencoder) hidden_n.size()", last_hidden.size())
@@ -248,6 +249,10 @@ if __name__ == "__main__":
 
                 # seq_prediction, state = model(sequences, lengths)
                 # hidden, cell = state
+                print(lengths)
+                print(sequences[0])
+                print(sequences[1])
+                exit()
 
                 seq_prediction = model(sequences, lengths)
 
