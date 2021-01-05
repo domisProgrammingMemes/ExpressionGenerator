@@ -26,10 +26,17 @@ print("Device:", device)
 
 
 # save a networks parameters for future use
-def save_network(net: nn.Module, version):
+def save_network(net: nn.Module):
     # save the network?
     save = input("Save net? (y) or (n)?")
     if save == "y":
+        version = input("Input the version ID (int): ")
+        try:
+            int(version)
+        except ValueError:
+            print("That is not an int Version number!")
+            save_network(net)
+
         path = "./models/Transition_" + str(version) + "_net.pth"
         torch.save(net.state_dict(), path)
     else:
@@ -61,8 +68,8 @@ def load_network(net: nn.Module):
 
 
 # Hyperparameters
-num_epochs = 1
-train_batch_size = 5
+num_epochs = 20
+train_batch_size = 1
 test_batch_size = 1
 learning_rate = 5e-5
 
@@ -71,8 +78,14 @@ teacher_forcing_ratio = 0.1
 # input_size = ?
 # sequence_length = ?
 
-# evtl quatsch
-transforms = transforms.ToTensor()
+# # evtl quatsch
+# tensor(0.2908) tensor(0.1124)
+# mean = 0.2908
+# std = 0.1124
+# transforms = transforms.Compose([
+#     transforms.Normalize(mean, std),
+# ])
+
 
 torch.manual_seed(0)
 
@@ -81,6 +94,7 @@ if __name__ == "__main__":
 
     dataset = AUDataset(csv_read_path)
     trainset, testset = torch.utils.data.random_split(dataset, [70, 15])
+
 
     # test_before_loader, _ = dataset[0]
     # print("test_before_loader.type():", test_before_loader.type())
@@ -382,8 +396,8 @@ if __name__ == "__main__":
                     # end frame
 
                 # end batch -> all frames
-                if index % 1 == 1 - 1:
-                    print(f"epoch: {epoch + 1}, mini-batch: {index + 1} - loss: {running_loss}")
+                if index % 20 == 20 - 1:
+                    print(f"epoch: {epoch + 1}, mini-batch: {index + 1} - loss: {running_loss / 20}")
                     running_loss = 0.0
 
             # end epoch
@@ -391,7 +405,7 @@ if __name__ == "__main__":
 
 
         print("Training finished!")
-        save_network(TransitionAE, 0)
+        save_network(TransitionAE)
 
     def test(loader: DataLoader, model):
         model.eval()
@@ -458,8 +472,8 @@ if __name__ == "__main__":
     #             transition.append(predicted_next_frame)
     #         return transition
 
-    # train(num_epochs)
-    # test(testloader, TransitionAE)
+    train(num_epochs)
+    test(testloader, TransitionAE)
 
     start = torch.tensor([1.1735114637781786e-08,7.241975343010249e-08,0.018730973801541314,0.09275460610676707,1.1999998418906612,1.176913967268185,0.1643039178064644,0.18280748342566253,0.17407648701965087,0.2411355052111981,0.229750059760292,3.626090594941871e-08,1.2085446863230588e-09,8.463887096639834e-11,2.5167801468923616e-10])
     end = torch.tensor([1.1999996482175648,1.199999459762757,1.199999349722415,1.1999967071002502,3.730670327388917e-07,2.192692481468664e-05,0.8932812902538821,0.9212007896416295,3.333123421165009e-07,1.7824243257347232e-07,3.263498064039033e-07,3.45552188066782e-07,4.02158899625008e-06,0.05982334779796216,1.1986696864049995])
