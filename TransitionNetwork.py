@@ -1,5 +1,7 @@
 import math
 import numpy as np
+import pandas as pd
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,6 +16,10 @@ from torch.nn.utils.rnn import pad_packed_sequence as PAD
 
 from CSVDataLoader import AUDataset
 from CSVDataLoader import PadSequencer
+
+
+
+
 
 csv_read_path = r"Data\FaceTracker\preprocessed\csv"
 
@@ -74,10 +80,10 @@ def load_network(net: nn.Module):
 
 
 # Hyperparameters
-num_epochs = 300
-train_batch_size = 5
-test_batch_size = 5
-learning_rate = 1e-4
+num_epochs = 2
+train_batch_size = 2
+test_batch_size = 2
+learning_rate = 5e-5
 
 # input_size = ?
 # sequence_length = ?
@@ -104,14 +110,14 @@ if __name__ == "__main__":
 
 
     class Encoder(nn.Module):
-        def __init__(self, n_features: int, latent_dim: int, num_layers: int):
+        def __init__(self, n_features: int, hidden_dim: int, num_layers: int):
             super(Encoder, self).__init__()
             self.n_features = n_features
-            self.hidden_dim = latent_dim
+            self.hidden_dim = hidden_dim
             self.num_layers = num_layers
 
             # batch, seq_len, n_features
-            self.encoder = nn.LSTM(n_features, latent_dim, num_layers=num_layers, batch_first=True)
+            self.encoder = nn.LSTM(n_features, hidden_dim, num_layers=num_layers, batch_first=True)
 
 
         def forward(self, x, lengths):
@@ -128,28 +134,36 @@ if __name__ == "__main__":
 
 
             x_pack = PACK(x, lengths, batch_first=True)
-            x, (last_hidden, _) = self.encoder(x_pack)
+            x, (last_hidden, last_cell) = self.encoder(x_pack)
             x, _ = PAD(x, batch_first=True)
+
+            # print(x.size())
+            # print(last_hidden.size())
+            # print(last_cell.size())
 
             # print("forward (Encoder) - last_hidden.size()", last_hidden.size())            # 1, batch_size, hidden_size
 
             # last_hidden = last_hidden.repeat(x.size(0), 1, 1)
-            last_hidden = last_hidden.reshape((train_batch_size, self.hidden_dim))
+            # last_hidden = last_hidden.reshape((train_batch_size, self.hidden_dim))
             # print("forward (Encoder) - last_hidden.size() after reshape()", last_hidden.size())            # batch_size, hidden_size
 
-            return last_hidden
+            return last_hidden, last_cell
 
 
     class Decoder(nn.Module):
-        def __init__(self, n_features: int, latent_dim: int, num_layers: int):
+        def __init__(self, n_features: int, hidden_dim: int, num_layers: int):
             super(Decoder, self).__init__()
             self.n_features = n_features
-            self.latent_dim = latent_dim
+            self.latent_dim = hidden_dim
             self.num_layers = num_layers
 
-            self.decoder = nn.LSTM(latent_dim, n_features, num_layers=num_layers, batch_first=True)
+            self.decoder = nn.LSTM(hidden_dim, hidden_dim, num_layers=num_layers)
+            self.linear = nn.Linear(hidden_dim, n_features)
+            self.linear2 = nn.Linear(n_features, hidden_dim)
 
-        def forward(self, x, lengths=0, last_hidden=0):
+
+
+        def forward(self, x, hidden, cell):
             # TODO: Was soll mir der Decoder zurück geben?
             #  Wie verwende ich die Inputs des Encoders?
             #  Arbeitet der Decoder Frame by Frame oder wie genau soll alles funktionieren?
@@ -160,14 +174,30 @@ if __name__ == "__main__":
 
             # print("forward (Decoder) - x.size()", x.size())
 
-            # x needs to get into shape: batch_size, seq_len, latent_dim
-            x = x.repeat(lengths[0], 1, 1)
+            # x needs to get into shape: batch_size, seq_len, hidden_dim
+            # x = x.repeat(lengths[0], 1, 1)
             # print("forward (Decoder) - x.size() after repeat", x.size())
 
-            x = x.reshape((-1, lengths[0], self.latent_dim))
+            # x = x.reshape((-1, lengths[0], self.latent_dim))
             # print("forward (Decoder) - x.size() after reshape()", x.size())
 
-            x, _ = self.decoder(x)
+
+            # print("Decoder forward x.size", x.size())
+            # print("Decoder forward hidden.size", hidden.size())
+            # print("Decoder forward cell.size", cell.size())
+
+            x = self.linear2(x)
+            x.transpose_(0, 1)
+            # print("Decoder forward x.size", x.size())
+            # exit()
+
+
+            prediction, (hidden, cell) = self.decoder(x, (hidden, cell))
+            # print("prediction size (not only last):", prediction.size())
+
+            # prediction = prediction[:, -1, :]
+
+            prediction = self.linear(prediction)
 
             # # x is ??
             # # hidden_n is last hidden state
@@ -175,7 +205,13 @@ if __name__ == "__main__":
             # x_pack = PACK(x, lengths, batch_first=True)
             # x, state = self.decoder(x_pack, last_hidden)
             # x, _ = PAD(x, batch_first=True)
-            return x
+
+            # hidden and last prediction are the same!
+            # print(prediction)
+            # print(hidden)
+            # exit()
+
+            return prediction, hidden, cell
 
 
     class LSTMAutoencoder(nn.Module):
@@ -184,11 +220,13 @@ if __name__ == "__main__":
             self.n_features = n_features
             self.hidden_size = hidden_size
 
-            self.encoder = Encoder(n_features=n_features, latent_dim=hidden_size, num_layers=1).to(device)
-            self.decoder = Decoder(n_features=n_features, latent_dim=hidden_size, num_layers=1).to(device)
+            self.encoder = Encoder(n_features=n_features, hidden_dim=hidden_size, num_layers=1)
+            self.decoder = Decoder(n_features=n_features, hidden_dim=hidden_size, num_layers=1)
+            self.linear = nn.Linear(n_features, hidden_size)
+            self.linear2 = nn.Linear(hidden_size, n_features)
 
 
-        def forward(self, x, lengths):
+        def forward(self, x, lengths, batch_size):
             # TODO: Was genau ist mein x?
             #  Wie verwende ich den Encoder?
             #  Wie verwende ich den Decoder?
@@ -205,15 +243,53 @@ if __name__ == "__main__":
             # hidden_n, cell_n = state
 
             # x, last_hidden = self.encoder(x, lengths)
-            last_hidden = self.encoder(x, lengths)
+            hidden, cell = self.encoder(x, lengths)
+
+            outputs = torch.zeros(lengths[0], batch_size, self.n_features).to(device)
+            # print("Decoder outputs-tensor:", outputs.size())
 
             # print("forward before decoding (LSTMAutoencoder) x.size()", x.size())
             # print("forward before decoding (LSTMAutoencoder) hidden_n.size()", last_hidden.size())
             # print("forward before decoding (LSTMAutoencoder) cell_n.size()", cell_n.size())
 
+            # x ist die ganze sequenz jedes batches - batch_size, seq_len, n_features
+            # in den decoder den ersten frame von x damit der rest der sequenz generiert wird?
+            # oder den offset? oder target? oder ne kombi aus allem?
+
+            # x is target_frame = last frame?
+
+            # print("LSTMAutoencoder forward encoding x.size()", x.size())
+
+            # last frame as target? or first frame? or second frame?
+            x = x[:, 0, :]              # x is the first anim frame
+            # print(x)
+            outputs[0] = x              # first frame outputs = first anim frame as this will be known
+            x = x.unsqueeze(1)
+            # exit()
+
+            # last frame representation
+            # x = self.linear(x)
+            # print("LSTMAutoencoder forward encoding after linear layer x.size()", x.size())
+            # exit()
+
+
             # x, state = self.decoder(x, lengths, state)
-            x = self.decoder(last_hidden, lengths)
-            return x
+            for t in range(1, lengths[0]):
+                x, hidden, cell = self.decoder(x, hidden, cell)
+
+                # print("Decoder output x (which is the second frame):", x.size())
+                x.transpose_(0, 1)
+                # print("Decoder output x (which is the second frame):", x.size())
+                # exit()
+                outputs[t] = x[:, 0, :]
+                # print("outputs (which is the reconstructed frame for each batch):", outputs.size())
+                # print(outputs[0])
+                # exit()
+
+
+            outputs.transpose_(0, 1)
+            # x = self.linear(x)
+            return outputs
 
 
         def init_hidden(self):
@@ -228,7 +304,8 @@ if __name__ == "__main__":
     #  -https://www.youtube.com/watch?v=EoGUlvhRYpk&t=28s&ab_channel=AladdinPersson
 
 
-    model = LSTMAutoencoder(n_features=15, hidden_size=7)
+    model = LSTMAutoencoder(n_features=15, hidden_size=256)
+    load_network(model)
     model = model.to(device)
 
     loss_function = nn.MSELoss(reduction="sum")
@@ -236,6 +313,7 @@ if __name__ == "__main__":
 
     def train_model(trainloader: DataLoader, testloader: DataLoader, n_Epochs: int):
         history = dict(train=[], test=[])
+        print("Training...")
 
         for epoch in range(1, n_Epochs + 1):
             model.train()
@@ -249,15 +327,19 @@ if __name__ == "__main__":
 
                 # seq_prediction, state = model(sequences, lengths)
                 # hidden, cell = state
-                print(lengths)
-                print(sequences[0])
-                print(sequences[1])
-                exit()
+                # print(lengths)
+                # print(sequences[0])
+                # print(sequences[1])
+                # exit()
 
-                seq_prediction = model(sequences, lengths)
+                seq_prediction = model(sequences, lengths, train_batch_size)
 
                 # print(seq_prediction.size())
                 # print(sequences.size())
+                #
+                # print(seq_prediction[:, 1, :])
+                # print(sequences[:, 1, :])
+                #
                 # exit()
 
                 # seq_prediction = seq_prediction.reshape(15, -1)
@@ -276,6 +358,7 @@ if __name__ == "__main__":
                 loss.backward()
                 optimizer.step()
 
+
                 train_losses.append(loss.item())
 
             test_losses = []
@@ -286,7 +369,7 @@ if __name__ == "__main__":
                     sequences = sequences.to(device)
                     # lengths = lengths.to(device)
 
-                    seq_prediction = model(sequences, lengths)
+                    seq_prediction = model(sequences, lengths, test_batch_size)
 
                     loss = loss_function(seq_prediction, sequences)
                     test_losses.append(loss.item())
@@ -300,8 +383,46 @@ if __name__ == "__main__":
 
         return model.eval(), history
 
-    trained_model, history = train_model(trainloader, testloader, num_epochs)
-    save_network(trained_model)
+    # trained_model, history = train_model(trainloader, testloader, num_epochs)
+
+    for index, data in enumerate(trainloader):
+        optimizer.zero_grad()
+        sequences, lengths, name = data
+        print("grab 1 sequence - sequences[0]:", sequences[0].size())
+        print("first frame - sequences[0][0]:", sequences[0][0])
+        print("last frame - sequences[0][-1]:", sequences[0][-1])
+        print("name of sequence", name[0])
+        sequences = sequences.to(device)
+        a_sequence = sequences[0]
+        a_sequence = a_sequence.unsqueeze(0)
+        print("a_sequence.size:", a_sequence.size())
+        a_sequence_length = lengths[0]
+        a_sequence_length = a_sequence_length.unsqueeze(0)
+        print("a_sequence_length:", a_sequence_length)
+        break
+
+    print(a_sequence.size())
+
+    def generate_test(model: nn.Module, sequence, length):
+        model.eval()
+        with torch.no_grad():
+            seq_prediction = model(sequence, length, 1)
+            return seq_prediction
+
+
+
+
+    prediction = generate_test(model, a_sequence, a_sequence_length)
+
+    prediction = prediction.cpu()
+    prediction = prediction.squeeze(0)
+    # print(prediction.size())
+
+    prediction_np = prediction.numpy()
+    prediction_df = pd.DataFrame(prediction_np)
+    prediction_df.to_csv(r".\Data\GeneratedAnims\Test.csv")
+
+    save_network(model)
 
 
 
