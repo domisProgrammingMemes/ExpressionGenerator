@@ -22,6 +22,7 @@ from CSVDataLoader import PadSequencer
 
 
 csv_read_path = r"Data\FaceTracker\preprocessed\csv"
+gen_save_pth = r"Data\GeneratedAnims\\"
 
 # Path to save and load models
 net_path = "./models/Transition_net.pth"
@@ -91,7 +92,8 @@ learning_rate = 5e-5
 # evtl quatsch
 transforms = transforms.ToTensor()
 
-torch.manual_seed(0)
+# 42 => disgustsurprise3_fill for sequences[1]
+torch.manual_seed(42)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -160,7 +162,6 @@ if __name__ == "__main__":
             self.decoder = nn.LSTM(hidden_dim, hidden_dim, num_layers=num_layers)
             self.linear = nn.Linear(hidden_dim, n_features)
             self.linear2 = nn.Linear(n_features, hidden_dim)
-
 
 
         def forward(self, x, hidden, cell):
@@ -291,6 +292,27 @@ if __name__ == "__main__":
             # x = self.linear(x)
             return outputs
 
+        # needs a sequence first to encode hidden and cell state!!
+        # def generate(self, x, length, batch_size=1):
+        #     outputs = torch.zeros(length, batch_size, self.n_features).to(device)
+        #     # print("outputs.size - generate", outputs.size())
+        #     # print("x.size - generate", x.size())
+        #     x = x[:, 0, :]
+        #     outputs[0] = x
+        #     x = x.unsqueeze(1)
+        #
+        #     # this is the problematic part which would need to be solved first!
+        #     hidden = torch.zeros(1, batch_size, 256).to(device)
+        #     cell = torch.zeros(1, batch_size, 256).to(device)
+        #
+        #     for t in range(1, length):
+        #         x, hidden, cell = self.decoder(x, hidden, cell)
+        #         x.transpose_(0, 1)
+        #         outputs[t] = x[:, 0, :]
+        #
+        #     outputs.transpose_(0, 1)
+        #     return outputs
+
 
         def init_hidden(self):
             pass
@@ -388,28 +410,28 @@ if __name__ == "__main__":
     for index, data in enumerate(trainloader):
         optimizer.zero_grad()
         sequences, lengths, name = data
-        print("grab 1 sequence - sequences[0]:", sequences[0].size())
-        print("first frame - sequences[0][0]:", sequences[0][0])
-        print("last frame - sequences[0][-1]:", sequences[0][-1])
-        print("name of sequence", name[0])
+        print("grab 1 sequence - sequences[0]:", sequences[1].size())
+        print("first frame - sequences[0][0]:", sequences[1][0])
+        print("last frame - sequences[0][-1]:", sequences[1][-1])
+        print("name of sequence", name[1])
         sequences = sequences.to(device)
-        a_sequence = sequences[0]
+        a_sequence = sequences[1]
         a_sequence = a_sequence.unsqueeze(0)
         print("a_sequence.size:", a_sequence.size())
-        a_sequence_length = lengths[0]
+        a_sequence_length = lengths[1]
         a_sequence_length = a_sequence_length.unsqueeze(0)
         print("a_sequence_length:", a_sequence_length)
+        the_name = name[1]
         break
 
     print(a_sequence.size())
 
+    # needs a sequence first to encode hidden and cell state!
     def generate_test(model: nn.Module, sequence, length):
         model.eval()
         with torch.no_grad():
             seq_prediction = model(sequence, length, 1)
             return seq_prediction
-
-
 
 
     prediction = generate_test(model, a_sequence, a_sequence_length)
@@ -418,11 +440,27 @@ if __name__ == "__main__":
     prediction = prediction.squeeze(0)
     # print(prediction.size())
 
+    # get right format for columns
+    df = pd.read_csv(csv_read_path + "/neutralhappy1_fill.csv")
+    header = list(df.drop(["Frame"], axis=1))
+    # df.close()
+    del df
+
+    # generate new name for the generated animation
+    new_name = "Test_gen_" + the_name
+
+    # transform predictions to csv
     prediction_np = prediction.numpy()
     prediction_df = pd.DataFrame(prediction_np)
-    prediction_df.to_csv(r".\Data\GeneratedAnims\Test.csv")
+    prediction_df.columns = header
+    # prediction_df.columns = ["AU1L","AU1R","AU2L","AU2R","AU4L","AU4R","AU6L","AU6R","AU9","AU10","AU13L","AU13R","AU18","AU22","AU27"]
+    prediction_df.to_csv(gen_save_pth + new_name + ".csv")
+    del prediction_np
+    del prediction_df
 
-    save_network(model)
+    # save_network(model)
+
+
 
 
 
