@@ -82,6 +82,7 @@ def load_network(net: nn.Module):
 
 
 # Hyperparameters
+# ONLY WORKS FOR BATCH = 1 NOW -> no padding so different sequence lengths
 num_epochs = 4
 train_batch_size = 1
 test_batch_size = 1
@@ -93,7 +94,7 @@ learning_rate = 1e-3
 # evtl quatsch
 transforms = transforms.ToTensor()
 
-# 42 => disgustsurprise3_fill for sequences[1]
+# 42 => neutralhappy3_fill
 torch.manual_seed(42)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -126,6 +127,13 @@ if __name__ == "__main__":
             self.rnn = nn.LSTM(n_features, n_hidden, num_layers=n_layers, batch_first=True, dropout=dropout)
             # to get back to feature_size (15 for now)
             self.linear = nn.Linear(n_hidden, n_features)
+
+            # or with just LSTMCell?
+            # n_features * 2 because target/input in cell will be concat current_frame+last_frame?
+            self.lstmcell_cat = nn.LSTMCell(n_features * 2, n_hidden)
+
+            # if not concat
+            # self.lstmcell_one = nn.LSTMCell(n_features, n_hidden)
 
 
         def forward(self, x):
@@ -174,13 +182,56 @@ if __name__ == "__main__":
 
 
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    model = None
-    load_network(model)
-    model = model.to(device)
+    # model = None
+    # load_network(model)
+    # model = model.to(device)
 
-    loss_function = nn.MSELoss()
-    # loss_function = nn.MSELoss(reduction="sum")
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    # define loss and optimizer
+    # loss_function = nn.MSELoss()
+    # # loss_function = nn.MSELoss(reduction="sum")
+    # optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+
+    for index, data in enumerate(trainloader):
+        batch_data, name = data
+        # print(batch_data.size())      # size = [batch_size, sequence_length, n_features]
+        print(name)                   # csv name
+        batch_size = batch_data.size(0)
+        seq_length = batch_data.size(1)
+        number_aus = batch_data.size(2)
+
+        first_frame = batch_data[0, 0]
+        # print(first_frame)
+        # print(first_frame.size())
+        last_frame = batch_data[0, -1]
+        # print(last_frame)
+        # print(last_frame.size())
+        target = torch.cat([first_frame, last_frame])       # target size: [30]
+        # print(target)
+        # print(target.size())
+
+        # initial hidden and cell at t=0
+        hidden, cell = LSTMGenerator.init_hidden()
+
+
+
+
+
+
+        exit()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def train_model(trainloader: DataLoader, testloader: DataLoader, n_Epochs: int):
         history = dict(train=[], test=[])
