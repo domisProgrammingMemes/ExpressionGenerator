@@ -70,7 +70,7 @@ def load_network(net: nn.Module):
             version = input("Which model should be loaded? (Version number): ")
 
         try:
-            path = "./models/Transition_" + str(version) + "_net.pth"
+            path = "./models/ExpressionGenerator_" + str(version) + "_net.pth"
             net.load_state_dict(torch.load(path))
 
         except FileNotFoundError:
@@ -132,8 +132,8 @@ if __name__ == "__main__":
             self.decoder2 = nn.Linear(n_output_encoder, n_features * 4)
             self.decoder3 = nn.Linear(n_features * 4, n_features)
             # batch norm
-            self.batch_norm_encoder = nn.BatchNorm1d(n_output_encoder)
-            self.batch_norm_lstm = nn.BatchNorm1d(n_hidden)
+            # self.batch_norm_encoder = nn.BatchNorm1d(n_output_encoder)
+            # self.batch_norm_lstm = nn.BatchNorm1d(n_hidden)
 
         def forward(self, x):
             """
@@ -142,14 +142,12 @@ if __name__ == "__main__":
             """
             # encoding
             encoded = self.encoder(x)
-            print(encoded.size())
-            encoded = self.batch_norm_encoder(encoded)
-            exit()
+            # encoded = self.batch_norm_encoder(encoded)
             encoded = F.leaky_relu(encoded)
 
             # temporal dynamics
             frame_encoding, (self.hidden, self.cell) = self.rnn(encoded, (self.hidden, self.cell))
-            frame_encoding = self.batch_norm_lstm(frame_encoding)
+            # frame_encoding = self.batch_norm_lstm(frame_encoding)
 
             # decoding with 3 fc
             prediction = F.leaky_relu(self.decoder1(frame_encoding))
@@ -163,14 +161,14 @@ if __name__ == "__main__":
 
 
     # Hyperparameters
-    num_epochs = 10
-    learning_rate = 1e-3
+    num_epochs = 100
+    learning_rate = 1e-4
     dropout = 0.5  # not used right now
     teacher_forcing_ratio = 0.5
 
     # model
     model = ExpressionGenerator(15, 256, 512, 1, dropout)
-    # load_network(model)
+    load_network(model)
     model = model.to(device)
 
     # define loss(es) and optimizer
@@ -317,6 +315,8 @@ if __name__ == "__main__":
         # append to txt .. better save than sorry!
         with open('training_history\history.txt', 'a') as f:
             print(loss_history, file=f)
+
+        writer.close()
 
 
     train_model(train_loader, test_loader, num_epochs)
