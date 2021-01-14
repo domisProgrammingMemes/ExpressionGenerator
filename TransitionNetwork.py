@@ -182,7 +182,7 @@ if __name__ == "__main__":
         loss_history = []
         print("Start training...")
 
-        for epoch in range(1, n_Epochs + 1):
+        for epoch in range(201, n_Epochs + 201):
 
             model.train()
             train_loss = 0
@@ -300,7 +300,7 @@ if __name__ == "__main__":
                     test_loss_mse = test_loss_mse + loss_mse.item()
                     test_loss_l1 = test_loss_l1 + loss_l1.item()
 
-            print(f"Epoch {epoch} of {num_epochs} epochs - Train: {train_loss} -- Test: MSE = {test_loss_mse} | L1 = {test_loss_l1}")
+            print(f"Epoch {epoch} of {num_epochs + 200} epochs - Train: {train_loss} -- Test: MSE = {test_loss_mse} | L1 = {test_loss_l1}")
 
             loss_history.append(train_loss)
             writer.add_scalar("MSE_Loss - train", train_loss, epoch)
