@@ -50,7 +50,7 @@ def save_network(net: nn.Module):
             print("That is not an int Version number!")
             save_network(net)
 
-        path = "./models/Transition_" + str(version) + "_net.pth"
+        path = "./models/ExGen_" + str(version) + "_net.pth"
         torch.save(net.state_dict(), path)
     else:
         pass
@@ -70,7 +70,7 @@ def load_network(net: nn.Module):
             version = input("Which model should be loaded? (Version number): ")
 
         try:
-            path = "./models/ExpressionGenerator_" + str(version) + "_net.pth"
+            path = "./models/normal_dataset/ExGen_" + str(version) + "_net.pth"
             net.load_state_dict(torch.load(path))
 
         except FileNotFoundError:
@@ -82,6 +82,7 @@ def load_network(net: nn.Module):
 
 # ONLY WORKS FOR BATCH = 1 NOW -> no padding so different sequence lengths
 train_batch_size = 1
+val_batch_size = 1
 test_batch_size = 1
 
 # evtl quatsch
@@ -95,7 +96,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 if __name__ == "__main__":
 
     dataset = AUDataset(csv_read_path)
-    trainset, testset = torch.utils.data.random_split(dataset, [225, 30])
+    trainset, valset, testset = torch.utils.data.random_split(dataset, [60, 13, 12])
 
     # test_before_loader, _ = dataset[0]
     # print("test_before_loader.type():", test_before_loader.type())
@@ -105,7 +106,7 @@ if __name__ == "__main__":
 
     train_loader = DataLoader(dataset=trainset, batch_size=train_batch_size, shuffle=True, num_workers=0,
                               drop_last=True)
-    # val_loader = DataLoader(dataset=validationset, batch_size=train_batch_size, shuffle=True, num_workers=0, drop_last=True)
+    val_loader = DataLoader(dataset=valset, batch_size=val_batch_size, shuffle=True, num_workers=0, drop_last=True)
     test_loader = DataLoader(dataset=testset, batch_size=test_batch_size, shuffle=True, num_workers=0, drop_last=True)
 
 
@@ -124,13 +125,14 @@ if __name__ == "__main__":
 
             # modules
             # linear for encoding of current_frame and target
-            self.encoder = nn.Linear(n_features * 2, n_output_encoder)
+            self.encoder1 = nn.Linear(n_features * 2, n_output_encoder)
+            self.encoder2 = nn.Linear(n_output_encoder, n_output_encoder)
             # lstm
             self.rnn = nn.LSTM(n_output_encoder, n_hidden, num_layers=n_layers, batch_first=True)
             # decoder -> 3 fc-layers
             self.decoder1 = nn.Linear(n_hidden, n_output_encoder)
-            self.decoder2 = nn.Linear(n_output_encoder, n_features * 4)
-            self.decoder3 = nn.Linear(n_features * 4, n_features)
+            self.decoder2 = nn.Linear(n_output_encoder, n_output_encoder / 4)
+            self.decoder3 = nn.Linear(n_output_encoder / 4, n_features)
             # batch norm
             # self.batch_norm_encoder = nn.BatchNorm1d(n_output_encoder)
             # self.batch_norm_lstm = nn.BatchNorm1d(n_hidden)
@@ -138,12 +140,16 @@ if __name__ == "__main__":
         def forward(self, x):
             """
             :param x: ist target besteht aus current_frame and end_frame
-            :return: prediction in form eines einzelnen Frames
+            :return: prediction in Form eines einzelnen Frames
             """
+            # some noise??
+            # dropout??
+
             # encoding
-            encoded = self.encoder(x)
+            encoded = self.encoder1(x)
             # encoded = self.batch_norm_encoder(encoded)
             encoded = F.leaky_relu(encoded)
+            encoded = self.encoder2(encoded)
 
             # temporal dynamics
             frame_encoding, (self.hidden, self.cell) = self.rnn(encoded, (self.hidden, self.cell))
@@ -161,8 +167,8 @@ if __name__ == "__main__":
 
 
     # Hyperparameters
-    num_epochs = 100
-    learning_rate = 1e-4
+    num_epochs = 60
+    learning_rate = 1e-5
     dropout = 0.5  # not used right now
     teacher_forcing_ratio = 0.5
 
@@ -175,14 +181,25 @@ if __name__ == "__main__":
     mse_loss = nn.MSELoss()
     l1_loss = nn.L1Loss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
+
+    # best current test error (MSE):
+    best_error = 1.1784
+    # best_error w_d 0.1 => 1.71..
+    # best_error w_d 0.001 => 1.37..
+    # best_error 256 256 512 = 0.6378730665892363
+    last_epoch = 76
+
+    # model_safe = 256_256_512 | Encoder1_size, Encoder2_size, Hidden_size
 
     # training loop
-    def train_model(train: DataLoader, test: DataLoader, n_Epochs: int):
+    def train_model(train: DataLoader, val: DataLoader, n_Epochs: int, best_test_error: float):
         writer = SummaryWriter()
         loss_history = []
+        best_epoch = 76
         print("Start training...")
 
-        for epoch in range(201, n_Epochs + 201):
+        for epoch in range(1 + last_epoch, n_Epochs + 1 + last_epoch):
 
             model.train()
             train_loss = 0
@@ -255,18 +272,18 @@ if __name__ == "__main__":
                     # print(target[0][0])
                     # exit()
 
-                loss = mse_loss(created_sequence, batch_data)
+                loss = l1_loss(created_sequence, batch_data)
                 loss.backward()
                 optimizer.step()
 
                 train_loss = train_loss + loss.item()
 
-            # eval the model on the test set
+            # eval the model on the val set
             model.eval()
             with torch.no_grad():
-                test_loss_mse = 0
-                test_loss_l1 = 0
-                for index, data in enumerate(test):
+                val_loss_mse = 0
+                val_loss_l1 = 0
+                for index, data in enumerate(val):
                     batch_data, name = data
                     batch_data = batch_data.to(device)
                     seq_length = batch_data.size(1)
@@ -297,36 +314,149 @@ if __name__ == "__main__":
                     loss_mse = mse_loss(created_sequence, batch_data)
                     loss_l1 = l1_loss(created_sequence, batch_data)
 
-                    test_loss_mse = test_loss_mse + loss_mse.item()
-                    test_loss_l1 = test_loss_l1 + loss_l1.item()
+                    val_loss_mse = val_loss_mse + loss_mse.item()
+                    val_loss_l1 = val_loss_l1 + loss_l1.item()
 
-            print(f"Epoch {epoch} of {num_epochs + 200} epochs - Train: {train_loss} -- Test: MSE = {test_loss_mse} | L1 = {test_loss_l1}")
+            print(f"Epoch {epoch} of {num_epochs + last_epoch} epochs - Train: {train_loss:.4f} --- Val: L1 = {val_loss_l1:.4f} | MSE = {val_loss_mse:.4f}")
 
             loss_history.append(train_loss)
-            writer.add_scalar("MSE_Loss - train", train_loss, epoch)
-            writer.add_scalar("MSE_Loss - test", test_loss_mse, epoch)
-            writer.add_scalar("L1_Loss - test", test_loss_l1, epoch)
+            writer.add_scalar("L1_Loss - train", train_loss, epoch)
+            writer.add_scalar("MSE_Loss - val", val_loss_mse, epoch)
+            writer.add_scalar("L1_Loss - val", val_loss_l1, epoch)
 
 
             # if val loss last worse than new val loss safe model - KOMMT NOCH
             # val loss with L1 Loss (am besten auch MSE einfach zum vgl!)
-            torch.save(model.state_dict(), "./models/ExpressionGenerator_0_net.pth")
+            if val_loss_mse < best_test_error:
+                torch.save(model.state_dict(), "./models/normal_dataset/ExGe_0_15_256_512_net.pth")
+                best_test_error = val_loss_mse
+                best_epoch = epoch
+                print("new Model was saved!")
+
+            # adjust lr (by hand now for better results?
+            # scheduler.step()
+
 
         # append to txt .. better save than sorry!
-        with open('training_history\history.txt', 'a') as f:
+        with open('training_history\history_normal_15_256_512.txt', 'a') as f:
             print(loss_history, file=f)
 
         writer.close()
+        print("best test error now (for copy-paste):", best_test_error)
+        print("epoch of best test error:", best_epoch)
+        print("Finished training!")
+        torch.save(model.state_dict(), "./models/normal_dataset/ExGe_1_15_256_512_net.pth")
+
+    train_model(train_loader, val_loader, num_epochs, best_error)
+
+    def test_model(test: DataLoader):
+        model.eval()
+        with torch.no_grad():
+            test_loss_mse = 0
+            test_loss_l1 = 0
+            for index, data in enumerate(test):
+                batch_data, name = data
+                batch_data = batch_data.to(device)
+                seq_length = batch_data.size(1)
+                number_aus = batch_data.size(2)
+                first_frame = batch_data[0, 0]
+                last_frame = batch_data[0, -1]
+
+                target = torch.cat([first_frame, last_frame])  # target size: [30]
+                target = target.unsqueeze(0)  # [1, 30]
+                target = target.unsqueeze(0)  # [1, 1, 30]
+                target = target.to(device)
+
+                model.zero_hidden()
+
+                created_sequence = torch.zeros(1, seq_length, number_aus).to(device)
+                created_sequence[0][0] = first_frame
+
+                for t in range(1, seq_length):
+                    prediction = model(target)
+                    prediction_aus = prediction.view(15)
+
+                    created_sequence[0][t] = prediction
+
+                    target = torch.cat([prediction_aus, last_frame])
+                    target = target.unsqueeze(0)
+                    target = target.unsqueeze(0)
+
+                loss_mse = mse_loss(created_sequence, batch_data)
+                loss_l1 = l1_loss(created_sequence, batch_data)
+
+                test_loss_mse = test_loss_mse + loss_mse.item()
+                test_loss_l1 = test_loss_l1 + loss_l1.item()
+
+        print(f"Test_losses: L1 = {test_loss_l1:.4f} | MSE = {test_loss_mse:.4f}")
 
 
-    train_model(train_loader, test_loader, num_epochs)
 
-    # trained_model, history = train_model(trainloader, testloader, num_epochs)
-    # safe history dictionary:
-    # with open("training_history\history.txt", "w") as file:
-    #     file.write(json.dumps(history))
-    # or
-    # with open('training_history\history.txt', 'a') as f:
-    #     print(losses, file=f)
+    ####### GENERATION #######
 
+    # frown to happy (not in data!)
+    start = torch.Tensor([0.06131799283585899,0.08172666935186508,0.03395699517793453,0.04818290386941117,1.1412230401159085,1.1035029605516014,0.113120523744227,1.0597114447811183e-07,0.30072830873532025,3.517824015742137e-05,8.749662808520226e-09,0.0013996257573782305,0.6260813195906696,0.09551505350147324,6.689342889722282e-10])
+    end = torch.Tensor([1.1999996314449428,1.1999995870728282,1.0278275208869838,1.0194900942312504,0.2341106233151145,0.0653982846386197,0.8537125658024893,0.8081682829103988,1.4364089873377762e-08,-2.1860498663560296e-08,9.06581770646935e-07,0.006658209848300654,-4.7158831256122355e-09,6.94503947633974e-07,0.9977853517181079])
+    # print(start.size())
+    # exit()
+
+    def generate_expression(start_frame: torch.Tensor, end_frame: torch.Tensor, sequence_length: int, name: str):
+        # eval the model on the test set
+        model.eval()
+        with torch.no_grad():
+            first_frame = start_frame.to(device)
+            last_frame = end_frame.to(device)
+            number_aus = first_frame.size(0)
+
+
+            target = torch.cat([first_frame, last_frame])  # target size: [30]
+            target = target.unsqueeze(0)  # [1, 30]
+            target = target.unsqueeze(0)  # [1, 1, 30]
+            target = target.to(device)
+
+            model.zero_hidden()
+
+            created_sequence = torch.zeros(1, sequence_length, number_aus).to(device)
+            created_sequence[0][0] = first_frame
+
+            for t in range(1, sequence_length):
+                prediction = model(target)
+                prediction_aus = prediction.view(15)
+
+                created_sequence[0][t] = prediction
+
+                target = torch.cat([prediction_aus, last_frame])
+                target = target.unsqueeze(0)
+                target = target.unsqueeze(0)
+
+
+            # for convenience:
+            sequence = created_sequence
+
+            sequence = sequence.cpu()
+            sequence = sequence.squeeze(0)
+            # print(prediction.size())
+
+            # get right format for columns
+            df = pd.read_csv(csv_read_path + "/neutralhappy1_fill.csv")
+            header = list(df.drop(["Frame"], axis=1))
+            # df.close()
+            del df
+
+            # generate new name for the generated animation
+            new_name = "Gen_" + name
+
+            # transform predictions to csv
+            sequence_np = sequence.numpy()
+            sequence_df = pd.DataFrame(sequence_np)
+            sequence_df.columns = header
+            # prediction_df.columns = ["AU1L","AU1R","AU2L","AU2R","AU4L","AU4R","AU6L","AU6R","AU9","AU10","AU13L","AU13R","AU18","AU22","AU27"]
+            sequence_df.to_csv(gen_save_pth + new_name + ".csv")
+            del sequence_np
+            del sequence_df
+
+    # generate_expression(start, end, 180, "frown_to_happy")
+
+
+    # custom safe method which can be used to store individual models (name as input during method)
     # save_network(model)
