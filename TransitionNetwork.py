@@ -98,9 +98,6 @@ if __name__ == "__main__":
     dataset = AUDataset(csv_read_path)
     trainset, valset, testset = torch.utils.data.random_split(dataset, [60, 13, 12])
 
-    # test_before_loader, _ = dataset[0]
-    # print("test_before_loader.type():", test_before_loader.type())
-
     # trainloader = DataLoader(dataset=trainset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=True)
     # testloader = DataLoader(dataset=testset, batch_size=test_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=True)
 
@@ -167,8 +164,8 @@ if __name__ == "__main__":
 
 
     # Hyperparameters
-    num_epochs = 60
-    learning_rate = 1e-5
+    num_epochs = 100
+    learning_rate = 1e-3
     dropout = 0.5  # not used right now
     teacher_forcing_ratio = 0.5
 
@@ -183,20 +180,17 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
 
-    # best current test error (MSE):
-    best_error = 1.1784
-    # best_error w_d 0.1 => 1.71..
-    # best_error w_d 0.001 => 1.37..
-    # best_error 256 256 512 = 0.6378730665892363
-    last_epoch = 76
+    # best current test error (MSE or L1?):
+    best_error = 100                    # none so far
+    last_epoch = 0                      # nothing done so far
 
-    # model_safe = 256_256_512 | Encoder1_size, Encoder2_size, Hidden_size
+    # model_safe = 15_256_512 | features, encoded_size, hidden_size
 
     # training loop
     def train_model(train: DataLoader, val: DataLoader, n_Epochs: int, best_test_error: float):
         writer = SummaryWriter()
         loss_history = []
-        best_epoch = 76
+        best_epoch = 0                  # nothing done so far
         print("Start training...")
 
         for epoch in range(1 + last_epoch, n_Epochs + 1 + last_epoch):
@@ -241,13 +235,6 @@ if __name__ == "__main__":
                     prediction_aus = prediction.view(15)
                     # print("prediction.size()", prediction_aus.size())               # [1, 1, 15]
 
-                    # prediction has the size: batch, hidden_size
-                    # real_next_frame = batch_data[0][t]
-                    # print("real next frame.size()", real_next_frame.size())
-                    # loss_per_frame = l1_loss(real und predicted)
-                    # sequence_loss += loss_per_frame
-
-
                     created_sequence[0][t] = prediction
                     # print("created sequence", created_sequence)
 
@@ -272,7 +259,7 @@ if __name__ == "__main__":
                     # print(target[0][0])
                     # exit()
 
-                loss = l1_loss(created_sequence, batch_data)
+                loss = mse_loss(created_sequence, batch_data)
                 loss.backward()
                 optimizer.step()
 
@@ -317,10 +304,11 @@ if __name__ == "__main__":
                     val_loss_mse = val_loss_mse + loss_mse.item()
                     val_loss_l1 = val_loss_l1 + loss_l1.item()
 
-            print(f"Epoch {epoch} of {num_epochs + last_epoch} epochs - Train: {train_loss:.4f} --- Val: L1 = {val_loss_l1:.4f} | MSE = {val_loss_mse:.4f}")
+            print(f"Epoch {epoch} of {num_epochs + last_epoch} epochs - Train (MSE): {train_loss:.4f} --- Val: MSE = {val_loss_mse:.4f} | L1 = {val_loss_l1:.4f}")
 
+            # save data to tensorboard and txt!
             loss_history.append(train_loss)
-            writer.add_scalar("L1_Loss - train", train_loss, epoch)
+            writer.add_scalar("MSE_Loss - train", train_loss, epoch)
             writer.add_scalar("MSE_Loss - val", val_loss_mse, epoch)
             writer.add_scalar("L1_Loss - val", val_loss_l1, epoch)
 
@@ -328,7 +316,7 @@ if __name__ == "__main__":
             # if val loss last worse than new val loss safe model - KOMMT NOCH
             # val loss with L1 Loss (am besten auch MSE einfach zum vgl!)
             if val_loss_mse < best_test_error:
-                torch.save(model.state_dict(), "./models/normal_dataset/ExGe_0_15_256_512_net.pth")
+                torch.save(model.state_dict(), "./models/normal_dataset/ExGen_0_15_256_512_net.pth")
                 best_test_error = val_loss_mse
                 best_epoch = epoch
                 print("new Model was saved!")
@@ -336,16 +324,15 @@ if __name__ == "__main__":
             # adjust lr (by hand now for better results?
             # scheduler.step()
 
-
         # append to txt .. better save than sorry!
-        with open('training_history\history_normal_15_256_512.txt', 'a') as f:
+        with open(r'training_history\history_normal_1901_15_256_512.txt', 'a') as f:
             print(loss_history, file=f)
 
         writer.close()
         print("best test error now (for copy-paste):", best_test_error)
         print("epoch of best test error:", best_epoch)
         print("Finished training!")
-        torch.save(model.state_dict(), "./models/normal_dataset/ExGe_1_15_256_512_net.pth")
+        torch.save(model.state_dict(), "./models/normal_dataset/ExGen_1_15_256_512_net.pth")
 
     train_model(train_loader, val_loader, num_epochs, best_error)
 
@@ -388,8 +375,7 @@ if __name__ == "__main__":
                 test_loss_mse = test_loss_mse + loss_mse.item()
                 test_loss_l1 = test_loss_l1 + loss_l1.item()
 
-        print(f"Test_losses: L1 = {test_loss_l1:.4f} | MSE = {test_loss_mse:.4f}")
-
+        print(f"Test_losses: MSE = {test_loss_mse:.4f} | L1 = {test_loss_l1:.4f}")
 
 
     ####### GENERATION #######
@@ -407,7 +393,6 @@ if __name__ == "__main__":
             first_frame = start_frame.to(device)
             last_frame = end_frame.to(device)
             number_aus = first_frame.size(0)
-
 
             target = torch.cat([first_frame, last_frame])  # target size: [30]
             target = target.unsqueeze(0)  # [1, 30]
@@ -428,7 +413,6 @@ if __name__ == "__main__":
                 target = torch.cat([prediction_aus, last_frame])
                 target = target.unsqueeze(0)
                 target = target.unsqueeze(0)
-
 
             # for convenience:
             sequence = created_sequence
