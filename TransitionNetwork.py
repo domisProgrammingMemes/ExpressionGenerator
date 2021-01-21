@@ -64,13 +64,9 @@ def load_network(net: nn.Module):
     if load == "y":
         version = input("Which model should be loaded? (Version number): ")
         try:
-            int(version)
-        except ValueError:
-            print("That is not a Version number!")
-            version = input("Which model should be loaded? (Version number): ")
-
-        try:
-            path = "./models/triple_dataset/ExGen_" + str(version) + "_net.pth"
+            # path = "./models/triple_dataset/ExGen_" + str(version) + "_net.pth"
+            # absolute path
+            path = "./models/triple_dataset/ExGen_0_15_256_512_net.pth"
             net.load_state_dict(torch.load(path))
 
         except FileNotFoundError:
@@ -85,8 +81,6 @@ train_batch_size = 1
 val_batch_size = 1
 test_batch_size = 1
 
-# evtl quatsch
-transforms = transforms.ToTensor()
 
 # 42 => ??
 torch.manual_seed(42)
@@ -177,12 +171,12 @@ if __name__ == "__main__":
     # define loss(es) and optimizer
     mse_loss = nn.MSELoss()
     l1_loss = nn.L1Loss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, eps=1e-5, amsgrad=True)
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
 
     # best current test error (MSE):
-    best_error = 2.8526
-    last_epoch = 0
+    best_error = 0.1623552451201249
+    last_epoch = 400
 
     # model_safe = 15_256_512 | features, encoded_size, hidden_size; 0_ is best model (MSE) from train, 1_ is last model from train
 
@@ -190,7 +184,7 @@ if __name__ == "__main__":
     def train_model(train: DataLoader, val: DataLoader, n_Epochs: int, best_test_error: float):
         writer = SummaryWriter()
         loss_history = []
-        best_epoch = 0
+        best_epoch = 400
         print("Start training...")
 
         for epoch in range(1 + last_epoch, n_Epochs + 1 + last_epoch):
@@ -263,7 +257,7 @@ if __name__ == "__main__":
                 loss.backward()
 
                 # grad clipping
-                nn.utils.clip_grad_value_(model.parameters(), clip_value=0.5)
+                nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
                 optimizer.step()
 
@@ -320,7 +314,7 @@ if __name__ == "__main__":
             # if val loss last worse than new val loss safe model - KOMMT NOCH
             # val loss with L1 Loss (am besten auch MSE einfach zum vgl!)
             if val_loss_mse < best_test_error:
-                torch.save(model.state_dict(), "./models/triple_dataset/ExGen_0_15_256_512_net.pth")
+                torch.save(model.state_dict(), "./models/triple_dataset/ExGen_400_0_15_256_512_net.pth")
                 best_test_error = val_loss_mse
                 best_epoch = epoch
                 print("New Model had been saved!")
@@ -329,14 +323,14 @@ if __name__ == "__main__":
             # scheduler.step()
 
         # append to txt .. better save than sorry!
-        with open(r'training_history\history_triple_1901_15_512.txt', 'a') as f:
+        with open(r'training_history\history_triple_2001_15_256_512.txt', 'a') as f:
             print(loss_history, file=f)
 
         writer.close()
         print("Best test error (for copy-paste):", best_test_error)
         print("Epoch (best test error):", best_epoch)
         print("Finished training!")
-        torch.save(model.state_dict(), "./models/triple_dataset/ExGen_1_15_256_512_net.pth")
+        torch.save(model.state_dict(), "./models/triple_dataset/ExGen_400_1_15_256_512_net.pth")
 
     def test_model(test: DataLoader):
         model.eval()
@@ -378,7 +372,7 @@ if __name__ == "__main__":
                 test_loss_l1 = test_loss_l1 + loss_l1.item()
 
         print(f"Test_losses: MSE = {test_loss_mse:.4f} | L1 = {test_loss_l1:.4f}")
-        with open(r'test_history\test_triple_1901_15_256_512.txt', 'a') as f:
+        with open(r'test_history\test_triple_2001_15_256_512.txt', 'a') as f:
             print(f"MSE:{test_loss_mse}, L1:{test_loss_l1}", file=f)
 
 
@@ -403,6 +397,12 @@ if __name__ == "__main__":
 
     # start happy_neutral3
     # start = torch.Tensor([1.7312022381517743e-07,9.942494218012084e-07,5.5279378574193394e-08,7.275862012056518e-08,0.1614868551455088,0.10531355676472627,1.199833379749608,1.1999999171354383,6.253415944733785e-08,0.25089657727780995,0.5664661956248268,1.0567180085991217,5.8532759285127815e-09,4.522632508438027e-09,1.2681872116221288e-07])
+
+    # suprise_disgust3
+    start = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
+
+    # suprise_happy5
+    end = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
 
     # print(start.size())
     # exit()
@@ -460,8 +460,8 @@ if __name__ == "__main__":
             del sequence_np
             del sequence_df
 
-    # generate_expression(start, end, 220, "Test_triple_DURATION_WHICHMODEL_FROM_to_TO")
-
+    # generate_expression(start, end, DURATION, "Test_triple_DURATION_WHICHMODEL_FROM_to_TO")
+    # generate_expression(start, end, 250, "Test_triple_250_best_suprise_to_happy")
 
     # custom safe method which can be used to store individual models (name as input during method)
     # save_network(model)

@@ -85,6 +85,12 @@ class AUDataset(Dataset):
         if self.transform is not None:
             sequence_tensor = self.transform(sequence_tensor)
 
+        # no neg values
+        sequence_tensor = torch.clamp(sequence_tensor, min=0.00, max=1.25)
+        n_digits = 4
+        # round to 4 decimals!
+        sequence_tensor = (sequence_tensor * 10**n_digits).round() / (10**n_digits)
+
 
         self.all_data_tensor_list.append(sequence_tensor)
         return sequence_tensor, str(current_sequence)
