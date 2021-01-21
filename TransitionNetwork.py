@@ -64,9 +64,9 @@ def load_network(net: nn.Module):
     if load == "y":
         version = input("Which model should be loaded? (Version number): ")
         try:
-            # path = "./models/triple_dataset/ExGen_" + str(version) + "_net.pth"
+            #path = "./models/reduced_network/ExGen_" + str(version) + "_net.pth"
             # absolute path
-            path = "./models/triple_dataset/ExGen_0_15_256_512_net.pth"
+            path = "./models/reduced_network/ExGen_0_0_15_50_100_net.pth"
             net.load_state_dict(torch.load(path))
 
         except FileNotFoundError:
@@ -117,13 +117,13 @@ if __name__ == "__main__":
             # modules
             # linear for encoding of current_frame and target
             self.encoder1 = nn.Linear(n_features * 2, n_output_encoder)
-            self.encoder2 = nn.Linear(n_output_encoder, n_output_encoder)
+            # self.encoder2 = nn.Linear(n_output_encoder, n_output_encoder)
             # lstm
             self.rnn = nn.LSTM(n_output_encoder, n_hidden, num_layers=n_layers, batch_first=True)
             # decoder -> 3 fc-layers
-            self.decoder1 = nn.Linear(n_hidden, n_output_encoder)
-            self.decoder2 = nn.Linear(n_output_encoder, int(n_output_encoder / 4))
-            self.decoder3 = nn.Linear(int(n_output_encoder / 4), n_features)
+            self.decoder1 = nn.Linear(n_hidden, n_features)
+            # self.decoder2 = nn.Linear(n_output_encoder, int(n_output_encoder / 4))
+            # self.decoder3 = nn.Linear(int(n_output_encoder / 4), n_features)
             # batch norm
             # self.batch_norm_encoder = nn.BatchNorm1d(n_output_encoder)
             # self.batch_norm_lstm = nn.BatchNorm1d(n_hidden)
@@ -140,16 +140,16 @@ if __name__ == "__main__":
             encoded = self.encoder1(x)
             # encoded = self.batch_norm_encoder(encoded)
             encoded = F.leaky_relu(encoded)
-            encoded = self.encoder2(encoded)
+            # encoded = self.encoder2(encoded)
 
             # temporal dynamics
             frame_encoding, (self.hidden, self.cell) = self.rnn(encoded, (self.hidden, self.cell))
             # frame_encoding = self.batch_norm_lstm(frame_encoding)
 
             # decoding with 3 fc
-            prediction = F.leaky_relu(self.decoder1(frame_encoding))
-            prediction = F.leaky_relu(self.decoder2(prediction))
-            prediction = self.decoder3(prediction)
+            prediction = self.decoder1(frame_encoding)
+            # prediction = F.leaky_relu(self.decoder2(prediction))
+            # prediction = self.decoder3(prediction)
             return prediction
 
         def zero_hidden(self):
@@ -175,8 +175,8 @@ if __name__ == "__main__":
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
 
     # best current test error (MSE):
-    best_error = 0.1623552451201249
-    last_epoch = 400
+    best_error = 0.3372822613455355
+    last_epoch = 100
 
     # model_safe = 15_256_512 | features, encoded_size, hidden_size; 0_ is best model (MSE) from train, 1_ is last model from train
 
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     def train_model(train: DataLoader, val: DataLoader, n_Epochs: int, best_test_error: float):
         writer = SummaryWriter()
         loss_history = []
-        best_epoch = 400
+        best_epoch = 98
         print("Start training...")
 
         for epoch in range(1 + last_epoch, n_Epochs + 1 + last_epoch):
@@ -314,7 +314,7 @@ if __name__ == "__main__":
             # if val loss last worse than new val loss safe model - KOMMT NOCH
             # val loss with L1 Loss (am besten auch MSE einfach zum vgl!)
             if val_loss_mse < best_test_error:
-                torch.save(model.state_dict(), "./models/triple_dataset/ExGen_400_0_15_256_512_net.pth")
+                torch.save(model.state_dict(), "./models/reduced_network/ExGen_0_0_15_50_100_net.pth")
                 best_test_error = val_loss_mse
                 best_epoch = epoch
                 print("New Model had been saved!")
@@ -323,14 +323,14 @@ if __name__ == "__main__":
             # scheduler.step()
 
         # append to txt .. better save than sorry!
-        with open(r'training_history\history_triple_2001_15_256_512.txt', 'a') as f:
+        with open(r'training_history\history_triple_2101_15_50_100.txt', 'a') as f:
             print(loss_history, file=f)
 
         writer.close()
         print("Best test error (for copy-paste):", best_test_error)
         print("Epoch (best test error):", best_epoch)
         print("Finished training!")
-        torch.save(model.state_dict(), "./models/triple_dataset/ExGen_400_1_15_256_512_net.pth")
+        torch.save(model.state_dict(), "./models/reduced_network/ExGen_0_1_15_50_100_net.pth")
 
     def test_model(test: DataLoader):
         model.eval()
@@ -372,12 +372,12 @@ if __name__ == "__main__":
                 test_loss_l1 = test_loss_l1 + loss_l1.item()
 
         print(f"Test_losses: MSE = {test_loss_mse:.4f} | L1 = {test_loss_l1:.4f}")
-        with open(r'test_history\test_triple_2001_15_256_512.txt', 'a') as f:
+        with open(r'test_history\test_triple_2101_15_50_100.txt', 'a') as f:
             print(f"MSE:{test_loss_mse}, L1:{test_loss_l1}", file=f)
 
 
-    train_model(train_loader, val_loader, num_epochs, best_error)
-    test_model(test_loader)
+    # train_model(train_loader, val_loader, num_epochs, best_error)
+    # test_model(test_loader)
 
     ####### GENERATION #######
 
@@ -399,10 +399,10 @@ if __name__ == "__main__":
     # start = torch.Tensor([1.7312022381517743e-07,9.942494218012084e-07,5.5279378574193394e-08,7.275862012056518e-08,0.1614868551455088,0.10531355676472627,1.199833379749608,1.1999999171354383,6.253415944733785e-08,0.25089657727780995,0.5664661956248268,1.0567180085991217,5.8532759285127815e-09,4.522632508438027e-09,1.2681872116221288e-07])
 
     # suprise_disgust3
-    start = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
+    # start = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
 
     # suprise_happy5
-    end = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
+    # end = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
 
     # print(start.size())
     # exit()
@@ -461,7 +461,7 @@ if __name__ == "__main__":
             del sequence_df
 
     # generate_expression(start, end, DURATION, "Test_triple_DURATION_WHICHMODEL_FROM_to_TO")
-    # generate_expression(start, end, 250, "Test_triple_250_best_suprise_to_happy")
+    # generate_expression(start, end, 250, "Test_reduced_time_from_to")
 
     # custom safe method which can be used to store individual models (name as input during method)
     # save_network(model)
