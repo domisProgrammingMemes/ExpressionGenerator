@@ -175,8 +175,8 @@ if __name__ == "__main__":
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
 
     # best current test error (MSE):
-    best_error = 0.1623552451201249
-    last_epoch = 400
+    best_error = 100
+    last_epoch = 0
 
     # model_safe = 15_256_512 | features, encoded_size, hidden_size; 0_ is best model (MSE) from train, 1_ is last model from train
 
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     def train_model(train: DataLoader, val: DataLoader, n_Epochs: int, best_test_error: float):
         writer = SummaryWriter()
         loss_history = []
-        best_epoch = 400
+        best_epoch = 0
         print("Start training...")
 
         for epoch in range(1 + last_epoch, n_Epochs + 1 + last_epoch):
@@ -314,7 +314,7 @@ if __name__ == "__main__":
             # if val loss last worse than new val loss safe model - KOMMT NOCH
             # val loss with L1 Loss (am besten auch MSE einfach zum vgl!)
             if val_loss_mse < best_test_error:
-                torch.save(model.state_dict(), "./models/triple_dataset/ExGen_400_0_15_256_512_net.pth")
+                torch.save(model.state_dict(), "./models/triple_dataset/ExGen_model_net.pth")
                 best_test_error = val_loss_mse
                 best_epoch = epoch
                 print("New Model had been saved!")
@@ -323,14 +323,14 @@ if __name__ == "__main__":
             # scheduler.step()
 
         # append to txt .. better save than sorry!
-        with open(r'training_history\history_triple_2001_15_256_512.txt', 'a') as f:
+        with open(r'training_history\history_triple_date_model.txt', 'a') as f:
             print(loss_history, file=f)
 
         writer.close()
         print("Best test error (for copy-paste):", best_test_error)
         print("Epoch (best test error):", best_epoch)
         print("Finished training!")
-        torch.save(model.state_dict(), "./models/triple_dataset/ExGen_400_1_15_256_512_net.pth")
+        torch.save(model.state_dict(), "./models/triple_dataset/ExGen_model_net.pth")
 
     def test_model(test: DataLoader):
         model.eval()
@@ -372,7 +372,7 @@ if __name__ == "__main__":
                 test_loss_l1 = test_loss_l1 + loss_l1.item()
 
         print(f"Test_losses: MSE = {test_loss_mse:.4f} | L1 = {test_loss_l1:.4f}")
-        with open(r'test_history\test_triple_2001_15_256_512.txt', 'a') as f:
+        with open(r'test_history\test_date_model.txt', 'a') as f:
             print(f"MSE:{test_loss_mse}, L1:{test_loss_l1}", file=f)
 
 
