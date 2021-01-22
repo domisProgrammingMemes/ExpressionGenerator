@@ -6,7 +6,10 @@ xlsx_read_path = r"Data\FaceTracker\raw\xlsx"
 xlsx_write_path = r"Data\FaceTracker\preprocessed\xlsx\\"
 
 csv_read_path = r"Data\FaceTracker\raw\csv"
-csv_write_path = r"Data\FaceTracker\preprocessed\csv\\"
+csv_fill1_path = r"Data\FaceTracker\preprocessed\csv_fill1\\"
+csv_fill2_path = r"Data\FaceTracker\preprocessed\csv_fill2\\"
+csv_fill3_path = r"Data\FaceTracker\preprocessed\csv_fill3\\"
+csv_fill4_path = r"Data\FaceTracker\preprocessed\csv_fill4\\"
 
 
 if __name__ == "__main__":
@@ -23,19 +26,29 @@ if __name__ == "__main__":
         df.sort_values(by="Frame", ascending=True, inplace=True)
         df.drop_duplicates(subset="Frame", inplace=True, ignore_index=True)
 
-        df.to_csv(path_or_buf=csv_write_path + csv, index=False)
+        rows = []
+        missing_frames = []
+        x = 1
+        for idx, data in df.iterrows():
+            rows.append(data[0])
+            if float(idx) != (data[0] - x):
+                missing_frames.append(idx + x)
+                x += 1
 
-        # rows = []
-        # missing_frames = []
-        # x = 1
-        # for idx, data in df.iterrows():
-        #     rows.append(data[0])
-        #     if float(idx) != (data[0] - x):
-        #         missing_frames.append(idx + x)
-        #         x += 1
-        #
         # print()
         # print(missing_frames)
+        if len(missing_frames) <= 25:
+            df.to_csv(path_or_buf=csv_fill1_path + csv, index=False)
+
+        else:
+            if len(missing_frames) < 60:
+                df.to_csv(path_or_buf=csv_fill2_path + csv, index=False)
+            else:
+                if len(missing_frames) < 130:
+                    df.to_csv(path_or_buf=csv_fill3_path + csv, index=False)
+                else:
+                    df.to_csv(path_or_buf=csv_fill4_path + csv, index=False)
+
 
 
     # -----------------------------------------------------------------------------------------------------
@@ -55,10 +68,10 @@ if __name__ == "__main__":
     # au9.drop_duplicates(subset='Frame', inplace=True, ignore_index=True)
 
     # -----------------------------------------------------------------------------------------------------
-    # for detecting missing frames/lines in csv
+    # # for detecting missing frames/lines in csv
     # rows = []
     # missingframes = []
-    #
+    # #
     # # check if every frame is included
     # x = 1
     # for idx, data in au9.iterrows():

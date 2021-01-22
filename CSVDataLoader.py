@@ -51,9 +51,9 @@ class AUDataset(Dataset):
         self.csv_names_list = os.listdir(self.csv_directory)
         self.transform = transform
         self.all_data_tensor_list = []
-        # clean up the list (only use "_fill"-files
+        # clean up the list (only use "filled"-files
         for csv in self.csv_names_list:
-            if not "_fill" in csv:
+            if not "_" in csv:
                 self.csv_names_list.remove(csv)
 
         # number of sequences is amount of correct csv_files

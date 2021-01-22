@@ -21,7 +21,7 @@ from CSVDataLoader import PadSequencer
 
 from torch.utils.tensorboard import SummaryWriter
 
-csv_read_path = r"Data\FaceTracker\preprocessed\csv"
+csv_read_path = r"Data\FaceTracker\preprocessed\new_csv"
 gen_save_pth = r"Data\GeneratedAnims\\"
 
 # Path to save and load models
@@ -66,7 +66,7 @@ def load_network(net: nn.Module):
         try:
             # path = "./models/triple_dataset/ExGen_" + str(version) + "_net.pth"
             # absolute path
-            path = "./models/triple_dataset/ExGen_0_15_256_512_net.pth"
+            path = "./models/Seq2Seq_triple_dataset/ExGen_0_B0_net.pth"
             net.load_state_dict(torch.load(path))
 
         except FileNotFoundError:
@@ -90,7 +90,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 if __name__ == "__main__":
 
     dataset = AUDataset(csv_read_path)
-    trainset, valset, testset = torch.utils.data.random_split(dataset, [205, 25, 25])
+    trainset, valset, testset = torch.utils.data.random_split(dataset, [220, 30, 29])
 
     # trainloader = DataLoader(dataset=trainset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=True)
     # testloader = DataLoader(dataset=testset, batch_size=test_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=True)
@@ -115,50 +115,53 @@ if __name__ == "__main__":
             self.cell = torch.zeros(self.n_layers, 1, self.hidden_size).to(device)
 
             # modules
-            # linear for encoding of current_frame and target
-            self.encoder1 = nn.Linear(n_features * 2, n_output_encoder)
-            self.encoder2 = nn.Linear(n_output_encoder, n_output_encoder)
-            # lstm
-            self.rnn = nn.LSTM(n_output_encoder, n_hidden, num_layers=n_layers, batch_first=True)
-            # decoder -> 3 fc-layers
-            self.decoder1 = nn.Linear(n_hidden, n_output_encoder)
-            self.decoder2 = nn.Linear(n_output_encoder, int(n_output_encoder / 4))
-            self.decoder3 = nn.Linear(int(n_output_encoder / 4), n_features)
-            # batch norm
-            # self.batch_norm_encoder = nn.BatchNorm1d(n_output_encoder)
-            # self.batch_norm_lstm = nn.BatchNorm1d(n_hidden)
+            # encoding lstm
+            self.encoding = nn.LSTM(input_size=n_features, hidden_size=n_output_encoder, num_layers=n_layers, dropout=p)
+            self.linear = nn.Linear(n_output_encoder, n_features)
 
-        def forward(self, x):
+            # lstm - temporal information
+            self.rnn = nn.LSTM(n_output_encoder + n_features, n_hidden, num_layers=n_layers, batch_first=True)
+
+            # decoder ->
+            self.decoding = nn.Linear(n_hidden, n_features)
+
+
+        def forward(self, x, target, hidden, cell):
             """
-            :param x: ist target besteht aus current_frame and end_frame
+            :param x: ist target besteht aus 10frames
+            :param target: ist das ende der sequenz
             :return: prediction in Form eines einzelnen Frames
             """
             # some noise??
             # dropout??
 
+            # difference target current frame??
+
             # encoding
-            encoded = self.encoder1(x)
-            # encoded = self.batch_norm_encoder(encoded)
-            encoded = F.leaky_relu(encoded)
-            encoded = self.encoder2(encoded)
+            _, (hidden, cell) = self.encoding(x, (hidden, cell))
+            # encoding = self.linear(hidden)                      # encoding size [1, 1, 15]
+            feature = torch.cat([hidden, target], dim=2)
 
             # temporal dynamics
-            frame_encoding, (self.hidden, self.cell) = self.rnn(encoded, (self.hidden, self.cell))
-            # frame_encoding = self.batch_norm_lstm(frame_encoding)
+            frame_encoding, (self.hidden, self.cell) = self.rnn(feature, (self.hidden, self.cell))
 
-            # decoding with 3 fc
-            prediction = F.leaky_relu(self.decoder1(frame_encoding))
-            prediction = F.leaky_relu(self.decoder2(prediction))
-            prediction = self.decoder3(prediction)
-            return prediction
+            # decoding with fc
+            prediction = self.decoding(frame_encoding)
+
+            return prediction, hidden, cell
 
         def zero_hidden(self):
             self.hidden = torch.zeros(self.n_layers, 1, self.hidden_size).to(device)
             self.cell = torch.zeros(self.n_layers, 1, self.hidden_size).to(device)
 
+        def zero_hidden_encoding(self):
+            hidden = torch.zeros(self.n_layers, 1, self.output_encoder_size).to(device)
+            cell = torch.zeros(self.n_layers, 1, self.output_encoder_size).to(device)
+            return hidden, cell
+
 
     # Hyperparameters
-    num_epochs = 100
+    num_epochs = 50
     learning_rate = 1e-3
     dropout = 0.5  # not used right now
     teacher_forcing_ratio = 0.5
@@ -175,10 +178,14 @@ if __name__ == "__main__":
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
 
     # best current test error (MSE):
-    best_error = 100
+    best_error = 50
     last_epoch = 0
+    # model_safe = ExGen_0_B0_net - B for batch | 0_ is best model (MSE) from train, 1_ is last model from train
 
-    # model_safe = 15_256_512 | features, encoded_size, hidden_size; 0_ is best model (MSE) from train, 1_ is last model from train
+    def fifo(tensor, x):
+        # print(tensor[1:])
+        # print(x)
+        return torch.cat((tensor[1:], x))
 
     # training loop
     def train_model(train: DataLoader, val: DataLoader, n_Epochs: int, best_test_error: float):
@@ -199,38 +206,29 @@ if __name__ == "__main__":
                 seq_length = batch_data.size(1)
                 number_aus = batch_data.size(2)
 
-                first_frame = batch_data[0, 0]
-                last_frame = batch_data[0, -1]
-
-                target = torch.cat([first_frame, last_frame])  # target size: [30]
-
-                target = target.unsqueeze(0)  # [1, 30]
-                target = target.unsqueeze(0)  # [1, 1, 30]
-                # print("target. size() [seq, batch, input_size", target.size())
-                target = target.to(device)
-
-                # initial hidden and cell at t=0
-                # hidden, cell = model.lstm.init_hidden()
-                # print("hidden size() [num_layer*num_directions, batch, input_size", hidden.size())
-                # print("cell size() [num_layer*num_directions, batch, input_size", cell.size())
-                model.zero_hidden()
-
                 # create empty sequence tensor for whole anim:
                 created_sequence = torch.zeros(1, seq_length, number_aus).to(device)
-                # print("created_seq.size() [batch, seq_len, feature_size", created_sequence.size())
-                created_sequence[0][0] = first_frame
+
+                sequence = batch_data[0, 0:20]
+                # first 10 frames are known and should be copied
+                for i in range(0, 20):
+                    created_sequence[0][i] = sequence[i]
+
+                sequence = sequence.unsqueeze(1)                # add dimension for batch [frames_given, 1, 15]
+                # first_frame = batch_data[0, 0]
+                last_frame = batch_data[0, -1]
+                last_frame = last_frame.unsqueeze(0)
+                last_frame = last_frame.unsqueeze(0)
 
                 # für jede sequenz
                 optimizer.zero_grad()
+                model.zero_hidden()
+                hidden, cell = model.zero_hidden_encoding()
 
-                for t in range(1, seq_length):
-                    # will ich hidden und cell überhaupt behalten?!
-                    prediction = model(target)
-                    prediction_aus = prediction.view(15)
-                    # print("prediction.size()", prediction_aus.size())               # [1, 1, 15]
+                for t in range(20, seq_length):
+                    prediction, hidden, cell = model(sequence, last_frame, hidden, cell)
 
                     created_sequence[0][t] = prediction
-                    # print("created sequence", created_sequence)
 
                     # teacher forcing
                     # use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
@@ -246,21 +244,17 @@ if __name__ == "__main__":
                     #     # exit()
 
                     # define new target
-                    target = torch.cat([prediction_aus, last_frame])
-                    target = target.unsqueeze(0)
-                    target = target.unsqueeze(0)
-                    # print("target size: ", target.size())
-                    # print(target[0][0])
-                    # exit()
+                    sequence = fifo(sequence, prediction)
 
+                # loss calculation
                 loss = mse_loss(created_sequence, batch_data)
                 loss.backward()
 
                 # grad clipping
                 nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
+                # upgrade gradients
                 optimizer.step()
-
                 train_loss = train_loss + loss.item()
 
             # eval the model on the val set
@@ -271,30 +265,35 @@ if __name__ == "__main__":
                 for index, data in enumerate(val):
                     batch_data, name = data
                     batch_data = batch_data.to(device)
+                    # print(batch_data.size())      # size = [batch_size, sequence_length, n_features]
+                    # print(name)                   # csv name
                     seq_length = batch_data.size(1)
                     number_aus = batch_data.size(2)
-                    first_frame = batch_data[0, 0]
-                    last_frame = batch_data[0, -1]
 
-                    target = torch.cat([first_frame, last_frame])  # target size: [30]
-                    target = target.unsqueeze(0)  # [1, 30]
-                    target = target.unsqueeze(0)  # [1, 1, 30]
-                    target = target.to(device)
-
-                    model.zero_hidden()
-
+                    # create empty sequence tensor for whole anim:
                     created_sequence = torch.zeros(1, seq_length, number_aus).to(device)
-                    created_sequence[0][0] = first_frame
 
-                    for t in range(1, seq_length):
-                        prediction = model(target)
-                        prediction_aus = prediction.view(15)
+                    sequence = batch_data[0, 0:20]
+                    # first 10 frames are known and should be copied
+                    for i in range(0, 20):
+                        created_sequence[0][i] = sequence[i]
 
+                    sequence = sequence.unsqueeze(1)  # add dimension for batch [10, 1, 15]
+                    # first_frame = batch_data[0, 0]
+                    last_frame = batch_data[0, -1]
+                    last_frame = last_frame.unsqueeze(0)
+                    last_frame = last_frame.unsqueeze(0)
+
+                    # für jede sequenz
+                    optimizer.zero_grad()
+                    model.zero_hidden()
+                    hidden, cell = model.zero_hidden_encoding()
+
+                    for t in range(20, seq_length):
+                        prediction, hidden, cell = model(sequence, last_frame, hidden, cell)
                         created_sequence[0][t] = prediction
-
-                        target = torch.cat([prediction_aus, last_frame])
-                        target = target.unsqueeze(0)
-                        target = target.unsqueeze(0)
+                        # define new target
+                        sequence = fifo(sequence, prediction)
 
                     loss_mse = mse_loss(created_sequence, batch_data)
                     loss_l1 = l1_loss(created_sequence, batch_data)
@@ -314,7 +313,7 @@ if __name__ == "__main__":
             # if val loss last worse than new val loss safe model - KOMMT NOCH
             # val loss with L1 Loss (am besten auch MSE einfach zum vgl!)
             if val_loss_mse < best_test_error:
-                torch.save(model.state_dict(), "./models/triple_dataset/ExGen_model_net.pth")
+                torch.save(model.state_dict(), "./models/Seq2Seq_triple_dataset/ExGen_0_B0_net.pth")
                 best_test_error = val_loss_mse
                 best_epoch = epoch
                 print("New Model had been saved!")
@@ -330,7 +329,7 @@ if __name__ == "__main__":
         print("Best test error (for copy-paste):", best_test_error)
         print("Epoch (best test error):", best_epoch)
         print("Finished training!")
-        torch.save(model.state_dict(), "./models/triple_dataset/ExGen_model_net.pth")
+        torch.save(model.state_dict(), "./models/Seq2Seq_triple_dataset/ExGen_1_B0_net.pth")
 
     def test_model(test: DataLoader):
         model.eval()
@@ -340,30 +339,35 @@ if __name__ == "__main__":
             for index, data in enumerate(test):
                 batch_data, name = data
                 batch_data = batch_data.to(device)
+                # print(batch_data.size())      # size = [batch_size, sequence_length, n_features]
+                # print(name)                   # csv name
                 seq_length = batch_data.size(1)
                 number_aus = batch_data.size(2)
-                first_frame = batch_data[0, 0]
-                last_frame = batch_data[0, -1]
 
-                target = torch.cat([first_frame, last_frame])  # target size: [30]
-                target = target.unsqueeze(0)  # [1, 30]
-                target = target.unsqueeze(0)  # [1, 1, 30]
-                target = target.to(device)
-
-                model.zero_hidden()
-
+                # create empty sequence tensor for whole anim:
                 created_sequence = torch.zeros(1, seq_length, number_aus).to(device)
-                created_sequence[0][0] = first_frame
 
-                for t in range(1, seq_length):
-                    prediction = model(target)
-                    prediction_aus = prediction.view(15)
+                sequence = batch_data[0, 0:20]
+                # first 10 frames are known and should be copied
+                for i in range(0, 20):
+                    created_sequence[0][i] = sequence[i]
 
+                sequence = sequence.unsqueeze(1)  # add dimension for batch [10, 1, 15]
+                # first_frame = batch_data[0, 0]
+                last_frame = batch_data[0, -1]
+                last_frame = last_frame.unsqueeze(0)
+                last_frame = last_frame.unsqueeze(0)
+
+                # für jede sequenz
+                optimizer.zero_grad()
+                model.zero_hidden()
+                hidden, cell = model.zero_hidden_encoding()
+
+                for t in range(20, seq_length):
+                    prediction, hidden, cell = model(sequence, last_frame, hidden, cell)
                     created_sequence[0][t] = prediction
-
-                    target = torch.cat([prediction_aus, last_frame])
-                    target = target.unsqueeze(0)
-                    target = target.unsqueeze(0)
+                    # define new target
+                    sequence = fifo(sequence, prediction)
 
                 loss_mse = mse_loss(created_sequence, batch_data)
                 loss_l1 = l1_loss(created_sequence, batch_data)
@@ -376,8 +380,8 @@ if __name__ == "__main__":
             print(f"MSE:{test_loss_mse}, L1:{test_loss_l1}", file=f)
 
 
-    train_model(train_loader, val_loader, num_epochs, best_error)
-    test_model(test_loader)
+    #train_model(train_loader, val_loader, num_epochs, best_error)
+    #test_model(test_loader)
 
     ####### GENERATION #######
 
@@ -390,7 +394,7 @@ if __name__ == "__main__":
     # end = torch.Tensor([0.06125034864614825,0.02625214569476484,4.114325553268089e-09,0.02274558697252165,0.17967660446464898,0.13432276325223844,0.15313606416869646,0.12118201135523902,3.097393968560188e-08,9.003948174507734e-10,0.1875999910930843,-3.096835818564804e-11,-1.6041286239695211e-10,2.658632689948891e-10,0.041449114407351585])
 
     # disgust_suprised5 end
-    # end = torch.Tensor([1.2000000063515006,1.2000000037242264,1.20000000988556,1.20000000517873,-6.258249112550545e-09,-5.344243176490128e-09,0.8856496208847644,0.7621254478783975,2.209424007560319e-09,-1.967204045131492e-08,9.93416993606448e-07,0.31120050895524043,3.8454029649169626e-07,0.18082177539922012,0.9725068273045891])
+    end = torch.Tensor([1.2000000063515006,1.2000000037242264,1.20000000988556,1.20000000517873,-6.258249112550545e-09,-5.344243176490128e-09,0.8856496208847644,0.7621254478783975,2.209424007560319e-09,-1.967204045131492e-08,9.93416993606448e-07,0.31120050895524043,3.8454029649169626e-07,0.18082177539922012,0.9725068273045891])
 
     # sup_neutral2 end
     # end = torch.Tensor([0.07738269721417339,0.08807293900396353,0.011010792242784829,0.06143003939298607,0.029883286893899432,1.3437291391474005e-10,6.630145104358612e-10,1.0842664182092701e-10,4.41634207694271e-11,1.8048909959586743e-11,1.7592160096523457e-10,1.8230500751428678e-11,0.19040087231317004,7.341144061507404e-11,1.1859499592224213e-09])
@@ -399,41 +403,49 @@ if __name__ == "__main__":
     # start = torch.Tensor([1.7312022381517743e-07,9.942494218012084e-07,5.5279378574193394e-08,7.275862012056518e-08,0.1614868551455088,0.10531355676472627,1.199833379749608,1.1999999171354383,6.253415944733785e-08,0.25089657727780995,0.5664661956248268,1.0567180085991217,5.8532759285127815e-09,4.522632508438027e-09,1.2681872116221288e-07])
 
     # suprise_disgust3
-    start = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
+    # start = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
 
     # suprise_happy5
-    end = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
+    # end = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
+
+    # happy_sad5
+    # end = torch.Tensor([0.17688237604716348,0.19866736744246646,0.11185978632743752,0.09487987030174973,1.0548543034029183,1.1542045333747448,0.0870861610479417,0.22915305471376285,0.01832295349686015,2.090484285219315e-08,0.03243690786750332,0.006573015681693785,0.20954841526969845,1.2414312200954819e-09,1.559739671024413e-09])
+    # start from that anim!!
+    # end = torch.Tensor([2.6904757304193483e-07,3.2651399899997965e-07,1.1110361348045573e-07,-4.68313755856502e-08,0.17775043528894266,0.07765913019549357,1.0402484487911563,1.123246129709042,8.839867718517393e-09,0.28844375448016346,0.8882674808572604,1.199999890009607,-5.074225205649736e-08,-5.6006952442998216e-08,-5.990424392451736e-08])
+
 
     # print(start.size())
     # exit()
 
-    def generate_expression(start_frame: torch.Tensor, end_frame: torch.Tensor, sequence_length: int, name: str):
+    def generate_expression(loader: DataLoader, end_frame: torch.Tensor, sequence_length: int, anim_name: str):
         # eval the model on the test set
         model.eval()
         with torch.no_grad():
-            first_frame = start_frame.to(device)
+            batch_data, name = iter(loader).next()
+
+            batch_data = batch_data.to(device)
             last_frame = end_frame.to(device)
-            number_aus = first_frame.size(0)
-
-            target = torch.cat([first_frame, last_frame])  # target size: [30]
-            target = target.unsqueeze(0)  # [1, 30]
-            target = target.unsqueeze(0)  # [1, 1, 30]
-            target = target.to(device)
-
-            model.zero_hidden()
+            last_frame = last_frame.unsqueeze(0)
+            last_frame = last_frame.unsqueeze(0)
+            number_aus = end_frame.size(0)
 
             created_sequence = torch.zeros(1, sequence_length, number_aus).to(device)
-            created_sequence[0][0] = first_frame
 
-            for t in range(1, sequence_length):
-                prediction = model(target)
-                prediction_aus = prediction.view(15)
+            sequence = batch_data[0, 0:20]
+            # first 10 frames are known and should be copied
+            for i in range(0, 20):
+                created_sequence[0][i] = sequence[i]
 
+            sequence = sequence.unsqueeze(1)  # add dimension for batch [10, 1, 15]
+
+            model.zero_hidden()
+            hidden, cell = model.zero_hidden_encoding()
+
+            for t in range(20, sequence_length):
+                prediction, hidden, cell = model(sequence, last_frame, hidden, cell)
                 created_sequence[0][t] = prediction
-
-                target = torch.cat([prediction_aus, last_frame])
-                target = target.unsqueeze(0)
-                target = target.unsqueeze(0)
+                # define new target
+                sequence = fifo(sequence, prediction)
 
             # for convenience:
             sequence = created_sequence
@@ -449,7 +461,7 @@ if __name__ == "__main__":
             del df
 
             # generate new name for the generated animation
-            new_name = "TEST_Triple" + name
+            new_name = "TEST_" + str(name) + str(anim_name)
 
             # transform predictions to csv
             sequence_np = sequence.numpy()
@@ -461,7 +473,20 @@ if __name__ == "__main__":
             del sequence_df
 
     # generate_expression(start, end, DURATION, "Test_triple_DURATION_WHICHMODEL_FROM_to_TO")
-    # generate_expression(start, end, 250, "Test_triple_250_best_suprise_to_happy")
+    generate_expression(test_loader, end, 250, "_to_surprised_252")
 
     # custom safe method which can be used to store individual models (name as input during method)
     # save_network(model)
+
+###### TRAIN LIKE NOW and then for generation just copy 1 Frame 20 times and go from there!
+# Try to train it with 20 copied frame maybe (-> Time!) => Outlook
+
+# Diskussion/Ergebnisse
+# Discuss differences with generating with 20 real frame or 20 copied
+# questionnaire as an addendum
+
+# Presentation
+### Quick why my thesis is there, what is the goal, what is my data -> Baseline (1-2 Slides)
+### Start with System (see where I stopped last time so to say!)
+
+
