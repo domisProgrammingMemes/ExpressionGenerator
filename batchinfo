@@ -1,0 +1,113 @@
+import pandas as pd
+import numpy as np
+import os
+import os.path
+
+csv_read_path = r"Data\FaceTracker\preprocessed\new_csv\\"
+csv_read_path_old = r"Data\FaceTracker\preprocessed\csv\\"
+
+if __name__ == "__main__":
+    csv_list = os.listdir(csv_read_path)
+    csv_list_old = os.listdir(csv_read_path_old)
+
+    def transition_lengths(csv_path, list):
+        lenset = set()
+        lendict = {"disgust": 0, "frown": 0, "happy": 0, "neutral": 0, "sad": 0, "surprise": 0, "angry": 0}
+        durdict = {}
+
+        disgustcount = 0
+        frowncount = 0
+        happycount = 0
+        neutralcount = 0
+        sadcount = 0
+        surprisecount = 0
+        angrycount = 0
+
+        for csv in list:
+            name, _ = csv.split(sep="_", maxsplit=1)
+            df = pd.read_csv(csv_path + "/" + csv)
+
+            # count all different transitions
+            if "happy" in name[0:6]:
+                happycount += 1
+                lendict["happy"] += 1
+                durdict[name] = len(df.index)
+            if "disgust" in name[0:8]:
+                disgustcount += 1
+                lendict["disgust"] += 1
+                durdict[name] = len(df.index)
+            if "frown" in name[0:6]:
+                frowncount += 1
+                lendict["frown"] += 1
+                durdict[name] = len(df.index)
+            if "neutral" in name[0:8]:
+                neutralcount += 1
+                lendict["neutral"] += 1
+                durdict[name] = len(df.index)
+            if "sad" in name[0:4]:
+                sadcount += 1
+                lendict["sad"] += 1
+                durdict[name] = len(df.index)
+            if "surprise" in name[0:9]:
+                surprisecount += 1
+                lendict["surprise"] += 1
+                durdict[name] = len(df.index)
+            if "angry" in name[0:6]:
+                angrycount += 1
+                lendict["angry"] += 1
+                durdict[name] = len(df.index)
+
+
+            length = (len(df.index))
+            lenset.add(length)
+        # print(lenset)                       # 40 Frame bis 401
+        # print(len(lenset))                  # 90 verschiedene Längen
+        print(lendict)
+        print(durdict)
+        print(len(durdict))
+
+    transition_lengths(csv_read_path, csv_list)
+    transition_lengths(csv_read_path_old, csv_list_old)
+
+
+    def transition_counts(csv_path):
+        disgustcount = 0
+        frowncount = 0
+        happycount = 0
+        neutralcount = 0
+        sadcount = 0
+        surprisecount = 0
+        angrycount = 0
+
+        WHAT = 0
+
+        for csv in csv_list:
+            name, _ = csv.split(sep="_")
+
+            # count all different transitions
+            if "happy" in name[0:6]:
+                happycount += 1
+            if "disgust" in name[0:8]:
+                disgustcount += 1
+            if "frown" in name[0:6]:
+                frowncount += 1
+            if "neutral" in name[0:8]:
+                neutralcount += 1
+            if "sad" in name[0:4]:
+                sadcount += 1
+            if "surprise" in name[0:9]:
+                surprisecount += 1
+            if "angry" in name[0:6]:
+                angrycount += 1
+            else:
+                WHAT += 1
+
+        # seems right            TOTAL                  FROM    TO
+        print(disgustcount)     # 86      - split into:  43  -> 43
+        print(happycount)       # 181     - split into:  89  -> 92
+        print(frowncount)       # 45      - split into:  22  -> 23
+        print(neutralcount)     # 65      - split into:  29  -> 36
+        print(sadcount)         # 74      - split into:  43  -> 31
+        print(surprisecount)    # 109     - split into:  53  -> 56
+        print(angrycount)       # 28      - split into:  15  -> 13
+
