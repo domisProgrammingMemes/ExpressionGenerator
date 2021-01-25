@@ -5,17 +5,14 @@ import os, os.path
 xlsx_read_path = r"Data\FaceTracker\raw\xlsx"
 xlsx_write_path = r"Data\FaceTracker\preprocessed\xlsx\\"
 
-csv_read_path = r"Data\FaceTracker\raw\csv"
-csv_fill1_path = r"Data\FaceTracker\preprocessed\csv_fill1\\"
-csv_fill2_path = r"Data\FaceTracker\preprocessed\csv_fill2\\"
-csv_fill3_path = r"Data\FaceTracker\preprocessed\csv_fill3\\"
-csv_fill4_path = r"Data\FaceTracker\preprocessed\csv_fill4\\"
+csv_read_path = r"Data\FaceTracker\raw\csv_balanced"
+csv_write_path = r"Data\FaceTracker\preprocessed\balanced_ds\\"
 
 
 if __name__ == "__main__":
 
-    xlsx_list = os.listdir(xlsx_read_path)
-    number_of_xlsx_files = len(xlsx_list)
+    # xlsx_list = os.listdir(xlsx_read_path)
+    # number_of_xlsx_files = len(xlsx_list)
     csv_list = os.listdir(csv_read_path)
     number_of_csv_files = len(csv_list)
 
@@ -37,18 +34,8 @@ if __name__ == "__main__":
 
         # print()
         # print(missing_frames)
-        if len(missing_frames) <= 25:
-            df.to_csv(path_or_buf=csv_fill1_path + csv, index=False)
 
-        else:
-            if len(missing_frames) < 60:
-                df.to_csv(path_or_buf=csv_fill2_path + csv, index=False)
-            else:
-                if len(missing_frames) < 130:
-                    df.to_csv(path_or_buf=csv_fill3_path + csv, index=False)
-                else:
-                    df.to_csv(path_or_buf=csv_fill4_path + csv, index=False)
-
+        df.to_csv(path_or_buf=csv_write_path + csv, index=False)
 
 
     # -----------------------------------------------------------------------------------------------------
