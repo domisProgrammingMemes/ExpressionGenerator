@@ -33,14 +33,18 @@ if __name__ == "__main__":
             # print(csv)
             # print(df.head(10))
 
-            df.interpolate(method="cubic", inplace=True)
+            df.interpolate(method="linear", inplace=True)
+            # df.interpolate(method="quadratic", inplace=True)
+            # df.interpolate(method="cubic", inplace=True)
             # df.interpolate(method="polynomial", order=2, inplace=True)
             # print(csv)
             # print(df.head(10))
             # break
 
             name, type = csv.split(sep=".")
-            csv = name + "_cfill." + type
+            csv = name + "_lfill." + type
+            # csv = name + "_qfill." + type
+            # csv = name + "_cfill." + type
 
             df.to_csv(path_or_buf=csv_write_path + csv, index=False)
 
