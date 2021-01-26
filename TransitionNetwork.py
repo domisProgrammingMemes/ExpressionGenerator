@@ -50,7 +50,7 @@ def save_network(net: nn.Module):
             print("That is not an int Version number!")
             save_network(net)
 
-        path = "./models/ExGen_" + str(version) + "_net.pth"
+        path = "./models/ExGen_Best" + str(version) + "_net.pth"
         torch.save(net.state_dict(), path)
     else:
         pass
@@ -62,11 +62,14 @@ def load_network(net: nn.Module):
     load = input("Load Network? (y) or (n)?")
 
     if load == "y":
-        version = input("Which model should be loaded? (Version number): ")
+        # version = input("Which model should be loaded? (Version number): ")
         try:
             # path = "./models/triple_dataset/ExGen_" + str(version) + "_net.pth"
             # absolute path
-            path = "./models/Seq2Seq_triple_dataset/ExGen_0_B0_net.pth"
+            # path = "./models/last_try_s2s_balanced_ds/ExGen_Bo300_net.pth"
+            # best model!!
+            path = "./models/working_model/ExGen_Bo355_net.pth"
+
             net.load_state_dict(torch.load(path))
 
         except FileNotFoundError:
@@ -90,7 +93,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 if __name__ == "__main__":
 
     dataset = AUDataset(csv_read_path)
-    trainset, valset, testset = torch.utils.data.random_split(dataset, [220, 30, 29])
+    trainset, valset, testset = torch.utils.data.random_split(dataset, [151, 19, 19])   # 189 -> 80% 10% 10% split!
 
     # trainloader = DataLoader(dataset=trainset, batch_size=train_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=True)
     # testloader = DataLoader(dataset=testset, batch_size=test_batch_size, collate_fn=PadSequencer(), shuffle=True, num_workers=0, drop_last=True)
@@ -162,7 +165,7 @@ if __name__ == "__main__":
 
     # Hyperparameters
     num_epochs = 50
-    learning_rate = 1e-3
+    learning_rate = 1e-5
     dropout = 0.5  # not used right now
     teacher_forcing_ratio = 0.5
 
@@ -171,6 +174,7 @@ if __name__ == "__main__":
     load_network(model)
     model = model.to(device)
 
+
     # define loss(es) and optimizer
     mse_loss = nn.MSELoss()
     l1_loss = nn.L1Loss()
@@ -178,8 +182,8 @@ if __name__ == "__main__":
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
 
     # best current test error (MSE):
-    best_error = 50
-    last_epoch = 0
+    best_error = 0.33288518129847944
+    last_epoch = 300
     # model_safe = ExGen_0_B0_net - B for batch | 0_ is best model (MSE) from train, 1_ is last model from train
 
     def fifo(tensor, x):
@@ -191,7 +195,7 @@ if __name__ == "__main__":
     def train_model(train: DataLoader, val: DataLoader, n_Epochs: int, best_test_error: float):
         writer = SummaryWriter()
         loss_history = []
-        best_epoch = 0
+        best_epoch = 293
         print("Start training...")
 
         for epoch in range(1 + last_epoch, n_Epochs + 1 + last_epoch):
@@ -250,8 +254,8 @@ if __name__ == "__main__":
                 loss = mse_loss(created_sequence, batch_data)
                 loss.backward()
 
-                # grad clipping
-                nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+                # grad clipping -> caused cuda-error
+                # nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
                 # upgrade gradients
                 optimizer.step()
@@ -313,7 +317,7 @@ if __name__ == "__main__":
             # if val loss last worse than new val loss safe model - KOMMT NOCH
             # val loss with L1 Loss (am besten auch MSE einfach zum vgl!)
             if val_loss_mse < best_test_error:
-                torch.save(model.state_dict(), "./models/Seq2Seq_triple_dataset/ExGen_0_B0_net.pth")
+                torch.save(model.state_dict(), "./models/last_try_s2s_balanced_ds/ExGen_Bo100_net.pth")
                 best_test_error = val_loss_mse
                 best_epoch = epoch
                 print("New Model had been saved!")
@@ -322,14 +326,14 @@ if __name__ == "__main__":
             # scheduler.step()
 
         # append to txt .. better save than sorry!
-        with open(r'training_history\history_triple_date_model.txt', 'a') as f:
+        with open(r'training_history\seq2seq_last.txt', 'a') as f:
             print(loss_history, file=f)
 
         writer.close()
         print("Best test error (for copy-paste):", best_test_error)
         print("Epoch (best test error):", best_epoch)
         print("Finished training!")
-        torch.save(model.state_dict(), "./models/Seq2Seq_triple_dataset/ExGen_1_B0_net.pth")
+        torch.save(model.state_dict(), "./models/last_try_s2s_balanced_ds/ExGen_B100_net.pth")
 
     def test_model(test: DataLoader):
         model.eval()
@@ -376,54 +380,28 @@ if __name__ == "__main__":
                 test_loss_l1 = test_loss_l1 + loss_l1.item()
 
         print(f"Test_losses: MSE = {test_loss_mse:.4f} | L1 = {test_loss_l1:.4f}")
-        with open(r'test_history\test_date_model.txt', 'a') as f:
+        with open(r'test_history\seq2seq_last.txt', 'a') as f:
             print(f"MSE:{test_loss_mse}, L1:{test_loss_l1}", file=f)
 
+    # train_model(train_loader, val_loader, num_epochs, best_error)
+    # test_model(test_loader)
 
-    #train_model(train_loader, val_loader, num_epochs, best_error)
-    #test_model(test_loader)
+    # GENERATION
 
-    ####### GENERATION #######
+    def sequenize_start(start_frame: torch.Tensor):
+        sequence = torch.empty(20, 15)
+        for i in range(0, 20):
+            sequence[i] = start_frame
 
-    # frown to suprised (not in data!)
-    # start = torch.Tensor([0.06131799283585899,0.08172666935186508,0.03395699517793453,0.04818290386941117,1.1412230401159085,1.1035029605516014,0.113120523744227,1.0597114447811183e-07,0.30072830873532025,3.517824015742137e-05,8.749662808520226e-09,0.0013996257573782305,0.6260813195906696,0.09551505350147324,6.689342889722282e-10])
-    # end = torch.Tensor([1.1999996314449428,1.1999995870728282,1.0278275208869838,1.0194900942312504,0.2341106233151145,0.0653982846386197,0.8537125658024893,0.8081682829103988,1.4364089873377762e-08,-2.1860498663560296e-08,9.06581770646935e-07,0.006658209848300654,-4.7158831256122355e-09,6.94503947633974e-07,0.9977853517181079])
-
-    # disgust1 to happy5 (more or less in data)
-    # start = torch.Tensor([6.716317271550969e-08, 0.02935825960378735, 0.021760095040568358, 0.08411739822017017, 1.1999998885514678, 1.1846442213750967, 0.2946981952170156, 0.14367314787076094, 0.0014814104832844687, 0.30272492210729074, 0.3789290959138957, 1.1742008603708393e-08, 4.753175528420333e-09, 4.965092547141178e-09, 1.8304739182918754e-09])
-    # end = torch.Tensor([0.06125034864614825,0.02625214569476484,4.114325553268089e-09,0.02274558697252165,0.17967660446464898,0.13432276325223844,0.15313606416869646,0.12118201135523902,3.097393968560188e-08,9.003948174507734e-10,0.1875999910930843,-3.096835818564804e-11,-1.6041286239695211e-10,2.658632689948891e-10,0.041449114407351585])
-
-    # disgust_suprised5 end
-    end = torch.Tensor([1.2000000063515006,1.2000000037242264,1.20000000988556,1.20000000517873,-6.258249112550545e-09,-5.344243176490128e-09,0.8856496208847644,0.7621254478783975,2.209424007560319e-09,-1.967204045131492e-08,9.93416993606448e-07,0.31120050895524043,3.8454029649169626e-07,0.18082177539922012,0.9725068273045891])
-
-    # sup_neutral2 end
-    # end = torch.Tensor([0.07738269721417339,0.08807293900396353,0.011010792242784829,0.06143003939298607,0.029883286893899432,1.3437291391474005e-10,6.630145104358612e-10,1.0842664182092701e-10,4.41634207694271e-11,1.8048909959586743e-11,1.7592160096523457e-10,1.8230500751428678e-11,0.19040087231317004,7.341144061507404e-11,1.1859499592224213e-09])
-
-    # start happy_neutral3
-    # start = torch.Tensor([1.7312022381517743e-07,9.942494218012084e-07,5.5279378574193394e-08,7.275862012056518e-08,0.1614868551455088,0.10531355676472627,1.199833379749608,1.1999999171354383,6.253415944733785e-08,0.25089657727780995,0.5664661956248268,1.0567180085991217,5.8532759285127815e-09,4.522632508438027e-09,1.2681872116221288e-07])
-
-    # suprise_disgust3
-    # start = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
-
-    # suprise_happy5
-    # end = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
-
-    # happy_sad5
-    # end = torch.Tensor([0.17688237604716348,0.19866736744246646,0.11185978632743752,0.09487987030174973,1.0548543034029183,1.1542045333747448,0.0870861610479417,0.22915305471376285,0.01832295349686015,2.090484285219315e-08,0.03243690786750332,0.006573015681693785,0.20954841526969845,1.2414312200954819e-09,1.559739671024413e-09])
-    # start from that anim!!
-    # end = torch.Tensor([2.6904757304193483e-07,3.2651399899997965e-07,1.1110361348045573e-07,-4.68313755856502e-08,0.17775043528894266,0.07765913019549357,1.0402484487911563,1.123246129709042,8.839867718517393e-09,0.28844375448016346,0.8882674808572604,1.199999890009607,-5.074225205649736e-08,-5.6006952442998216e-08,-5.990424392451736e-08])
+        return sequence
 
 
-    # print(start.size())
-    # exit()
-
-    def generate_expression(loader: DataLoader, end_frame: torch.Tensor, sequence_length: int, anim_name: str):
+    def generate_expression(start_frame: torch.Tensor, end_frame: torch.Tensor, sequence_length: int, anim_name: str):
         # eval the model on the test set
         model.eval()
         with torch.no_grad():
-            batch_data, name = iter(loader).next()
 
-            batch_data = batch_data.to(device)
+
             last_frame = end_frame.to(device)
             last_frame = last_frame.unsqueeze(0)
             last_frame = last_frame.unsqueeze(0)
@@ -431,12 +409,12 @@ if __name__ == "__main__":
 
             created_sequence = torch.zeros(1, sequence_length, number_aus).to(device)
 
-            sequence = batch_data[0, 0:20]
+            sequence = sequenize_start(start_frame).to(device)
             # first 10 frames are known and should be copied
             for i in range(0, 20):
                 created_sequence[0][i] = sequence[i]
 
-            sequence = sequence.unsqueeze(1)  # add dimension for batch [10, 1, 15]
+            sequence = sequence.unsqueeze(1)  # add dimension for batch [20, 1, 15]
 
             model.zero_hidden()
             hidden, cell = model.zero_hidden_encoding()
@@ -455,13 +433,13 @@ if __name__ == "__main__":
             # print(prediction.size())
 
             # get right format for columns
-            df = pd.read_csv(csv_read_path + "/neutralhappy1_fill.csv")
+            df = pd.read_csv(csv_read_path + "/neutralhappy2_lfill.csv")
             header = list(df.drop(["Frame"], axis=1))
             # df.close()
             del df
 
             # generate new name for the generated animation
-            new_name = "TEST_" + str(name) + str(anim_name)
+            new_name = "ExGen_" + str(anim_name)
 
             # transform predictions to csv
             sequence_np = sequence.numpy()
@@ -472,8 +450,64 @@ if __name__ == "__main__":
             del sequence_np
             del sequence_df
 
+    ####### GENERATION #######
+
+    # frown to suprised (not in data!)
+    # start = torch.Tensor([0.06131799283585899,0.08172666935186508,0.03395699517793453,0.04818290386941117,1.1412230401159085,1.1035029605516014,0.113120523744227,1.0597114447811183e-07,0.30072830873532025,3.517824015742137e-05,8.749662808520226e-09,0.0013996257573782305,0.6260813195906696,0.09551505350147324,6.689342889722282e-10])
+    # end = torch.Tensor([1.1999996314449428,1.1999995870728282,1.0278275208869838,1.0194900942312504,0.2341106233151145,0.0653982846386197,0.8537125658024893,0.8081682829103988,1.4364089873377762e-08,-2.1860498663560296e-08,9.06581770646935e-07,0.006658209848300654,-4.7158831256122355e-09,6.94503947633974e-07,0.9977853517181079])
+
+    # disgust1 to happy5 (more or less in data)
+    # start = torch.Tensor([6.716317271550969e-08, 0.02935825960378735, 0.021760095040568358, 0.08411739822017017, 1.1999998885514678, 1.1846442213750967, 0.2946981952170156, 0.14367314787076094, 0.0014814104832844687, 0.30272492210729074, 0.3789290959138957, 1.1742008603708393e-08, 4.753175528420333e-09, 4.965092547141178e-09, 1.8304739182918754e-09])
+    # end = torch.Tensor([0.06125034864614825,0.02625214569476484,4.114325553268089e-09,0.02274558697252165,0.17967660446464898,0.13432276325223844,0.15313606416869646,0.12118201135523902,3.097393968560188e-08,9.003948174507734e-10,0.1875999910930843,-3.096835818564804e-11,-1.6041286239695211e-10,2.658632689948891e-10,0.041449114407351585])
+
+    # disgust_suprised5 end
+    # end = torch.Tensor([1.2000000063515006,1.2000000037242264,1.20000000988556,1.20000000517873,-6.258249112550545e-09,-5.344243176490128e-09,0.8856496208847644,0.7621254478783975,2.209424007560319e-09,-1.967204045131492e-08,9.93416993606448e-07,0.31120050895524043,3.8454029649169626e-07,0.18082177539922012,0.9725068273045891])
+
+    # sup_neutral2 end
+    # end = torch.Tensor([0.07738269721417339,0.08807293900396353,0.011010792242784829,0.06143003939298607,0.029883286893899432,1.3437291391474005e-10,6.630145104358612e-10,1.0842664182092701e-10,4.41634207694271e-11,1.8048909959586743e-11,1.7592160096523457e-10,1.8230500751428678e-11,0.19040087231317004,7.341144061507404e-11,1.1859499592224213e-09])
+
+    # start happy_neutral3
+    # start = torch.Tensor([1.7312022381517743e-07,9.942494218012084e-07,5.5279378574193394e-08,7.275862012056518e-08,0.1614868551455088,0.10531355676472627,1.199833379749608,1.1999999171354383,6.253415944733785e-08,0.25089657727780995,0.5664661956248268,1.0567180085991217,5.8532759285127815e-09,4.522632508438027e-09,1.2681872116221288e-07])
+
+    # suprise_disgust3
+    # start = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
+
+    # suprise_happy5
+    # end = torch.Tensor([1.199998046094369,1.1999726704973803,1.1999998118766648,0.9563605766628656,1.5585242134849914e-07,7.692463816309587e-07,6.250386339331801e-08,6.782585383713505e-08,9.492120125413018e-09,4.076888149768646e-09,9.729325069729388e-09,5.925533415555281e-09,1.9051411842377304e-09,3.874445721084235e-09,1.1999999482368842])
+
+    # happy_sad5
+    # end = torch.Tensor([0.17688237604716348,0.19866736744246646,0.11185978632743752,0.09487987030174973,1.0548543034029183,1.1542045333747448,0.0870861610479417,0.22915305471376285,0.01832295349686015,2.090484285219315e-08,0.03243690786750332,0.006573015681693785,0.20954841526969845,1.2414312200954819e-09,1.559739671024413e-09])
+    # start from that anim!!
+    # end = torch.Tensor([2.6904757304193483e-07,3.2651399899997965e-07,1.1110361348045573e-07,-4.68313755856502e-08,0.17775043528894266,0.07765913019549357,1.0402484487911563,1.123246129709042,8.839867718517393e-09,0.28844375448016346,0.8882674808572604,1.199999890009607,-5.074225205649736e-08,-5.6006952442998216e-08,-5.990424392451736e-08])
+
+    # happy_frown5 -> frown
+    frown = torch.Tensor(
+        [0.11600816761214412, 0.1284655902491436, 0.04555017236853346, 0.07891883398256783, 1.1624704923767863,
+         1.1292259224988748, 4.1179628134090425e-09, 1.3139848525048626e-08, 0.3780972373525189,
+         0.002627721186276977, 0.4052149252538391, 0.006900503041645656, 2.656951757012366e-10,
+         -8.446394673406755e-10, -9.975166643120387e-10])
+
+    # surprise_disgust2 -> surprise
+    surprise = torch.Tensor([1.1999999112205617,1.1999999159976815,1.1999999328538695,1.1488722636177362,4.595641601005289e-08,1.7807415136001172e-07,4.928640608924983e-05,3.610486793096247e-05,9.383047183030742e-08,-1.3288099099324539e-08,2.009467533535717e-08,-1.4430244360720015e-09,-2.4141230449188912e-08,5.907091004922681e-09,1.2000000099788897])
+
+    # happy_sad5 -> sad
+    sad = torch.Tensor([0.1469748339078054, 0.1645827189561475, 0.09715293786052676, 0.09448502011811992,
+                          1.0443333135088018,1.1510849319027174, 0.045217939313237115, 0.20751686582277729,
+                          0.0356037971287012, 2.5040262983977084e-08,0.024025351834480672, 0.00011304006851385568,
+                          0.17286549919783545, 4.5758218435735396e-08,1.1034485458071822e-08])
+
+    # happy_neutral -> neutral
+    neutral = torch.Tensor([1.3183410608020914e-09,0.007341170604253437,6.560640186486611e-10,6.156423513747244e-10,0.05534238495332509,0.03196604997678923,4.029073564969686e-07,0.05242904922403188,2.121624087550293e-09,3.935684714177853e-09,-4.39079980658653e-12,0.06648207797258246,0.08107495649839419,4.873076503851266e-10,0.02053503309248228])
+
+    # happy_neutral -> happy
+    happy = torch.Tensor([1.7312022381517743e-07,9.942494218012084e-07,5.5279378574193394e-08,7.275862012056518e-08,0.1614868551455088,0.10531355676472627,1.199833379749608,1.1999999171354383,6.253415944733785e-08,0.25089657727780995,0.5664661956248268,1.0567180085991217,5.8532759285127815e-09,4.522632508438027e-09,1.2681872116221288e-07])
+
+
+    # surprise_disgust -> disgust
+    disgust = torch.Tensor([1.0670191593715594e-07,3.2528796729084693e-07,0.12982850058516537,0.06965097196072645,1.199999695066714,1.1706918609055257,0.2146797932278581,0.046555729206558386,0.042598584997725494,0.4542929713122771,0.401825638510415,8.596737489378636e-07,4.7000663724022786e-08,1.2655896810496993e-08,1.0064052277759405e-08])
+
     # generate_expression(start, end, DURATION, "Test_triple_DURATION_WHICHMODEL_FROM_to_TO")
-    generate_expression(test_loader, end, 250, "_to_surprised_252")
+    generate_expression(neutral, frown, 250, "neutral2frown")
 
     # custom safe method which can be used to store individual models (name as input during method)
     # save_network(model)
@@ -486,7 +520,6 @@ if __name__ == "__main__":
 # questionnaire as an addendum
 
 # Presentation
-### Quick why my thesis is there, what is the goal, what is my data -> Baseline (1-2 Slides)
+### Quick why my thesis is there, what is the goal, what is my data -> Baseline (2 Slides)
 ### Start with System (see where I stopped last time so to say!)
-
 
