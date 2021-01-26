@@ -169,6 +169,10 @@ if __name__ == "__main__":
     dropout = 0.5  # not used right now
     teacher_forcing_ratio = 0.5
 
+    # safe path for models (best and last)
+    save_best = "./models/last_try_s2s_balanced_ds/ExGen_Bo100_net.pth"
+    save_last = "./models/last_try_s2s_balanced_ds/ExGen_B100_net.pth"
+
     # model
     model = ExpressionGenerator(15, 256, 512, 1, dropout)
     load_network(model)
@@ -317,7 +321,7 @@ if __name__ == "__main__":
             # if val loss last worse than new val loss safe model - KOMMT NOCH
             # val loss with L1 Loss (am besten auch MSE einfach zum vgl!)
             if val_loss_mse < best_test_error:
-                torch.save(model.state_dict(), "./models/last_try_s2s_balanced_ds/ExGen_Bo100_net.pth")
+                torch.save(model.state_dict(), save_best)
                 best_test_error = val_loss_mse
                 best_epoch = epoch
                 print("New Model had been saved!")
@@ -333,7 +337,7 @@ if __name__ == "__main__":
         print("Best test error (for copy-paste):", best_test_error)
         print("Epoch (best test error):", best_epoch)
         print("Finished training!")
-        torch.save(model.state_dict(), "./models/last_try_s2s_balanced_ds/ExGen_B100_net.pth")
+        torch.save(model.state_dict(), save_last)
 
     def test_model(test: DataLoader):
         model.eval()
