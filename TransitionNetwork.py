@@ -105,6 +105,7 @@ if __name__ == "__main__":
     teacher_forcing_ratio = 0.5                 # not used right now
 
     # safe path for models (best and last)
+
     best = "./models/ExGen_Best.pth"
     last = "./models/ExGen_Last.pth"
 
@@ -112,6 +113,7 @@ if __name__ == "__main__":
     model = ExpressionGenerator(15, 256, 512, 1, dropout)
     model.load_state_dict(torch.load(best))
     model = model.to(device)
+
 
     # define loss(es) and optimizer
     mse_loss = nn.MSELoss()
@@ -197,7 +199,6 @@ if __name__ == "__main__":
             model.eval()
             with torch.no_grad():
                 val_loss_mse = 0
-                val_loss_l1 = 0
                 for index, data in enumerate(val):
                     batch_data, name = data
                     batch_data = batch_data.to(device)
@@ -260,7 +261,6 @@ if __name__ == "__main__":
         model.eval()
         with torch.no_grad():
             test_loss_mse = 0
-            test_loss_l1 = 0
             for index, data in enumerate(test):
                 batch_data, name = data
                 batch_data = batch_data.to(device)
@@ -312,6 +312,7 @@ if __name__ == "__main__":
     best = "./models/working_model/ExGen_Bo355_net.pth"
     # where to save the animation
     gen_save_pth = "./Data/Evaluation/i_testing/"
+    # testing is done with random au-combinations (close to expression though)
 
     model = ExpressionGenerator(15, 256, 512, 1, dropout)
     model.load_state_dict(torch.load(best))
@@ -368,7 +369,7 @@ if __name__ == "__main__":
             del df
 
             # generate new name for the generated animation
-            new_name = "ExGen_" + str(anim_name)
+            new_name = "ExGen_i_" + str(anim_name)
 
 
             # transform predictions to csv
@@ -437,10 +438,13 @@ if __name__ == "__main__":
         "sad": sad
     }
 
-    from itertools import permutations
-    perm = permutations(mydict, 2)
-    for i in list(perm):
-        x, y = i
-        name = "i_" + x + "2" + y
-        generate_expression(mydict[x], mydict[y], 500, name)
+    def generate_multiple():
+        from itertools import permutations
+        perm = permutations(mydict, 2)
+        for i in list(perm):
+            x, y = i
+            name = "i_" + x + "2" + y
+            generate_expression(mydict[x], mydict[y], 500, name)
+
+    generate_expression(happy, sad, 500, "happy2sad")
 
