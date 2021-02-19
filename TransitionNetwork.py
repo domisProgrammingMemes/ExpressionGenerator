@@ -1,10 +1,7 @@
-import math
-import numpy as np
 import pandas as pd
 import random
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
@@ -444,10 +441,6 @@ if __name__ == "__main__":
     perm = permutations(mydict, 2)
     for i in list(perm):
         x, y = i
-        # print(mydict[x])
-        # print(mydict[y])
-        name = "h_" + x + "2" + y
-        # print(name)
+        name = "i_" + x + "2" + y
         generate_expression(mydict[x], mydict[y], 500, name)
-
 
