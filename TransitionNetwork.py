@@ -189,7 +189,7 @@ if __name__ == "__main__":
                 loss = mse_loss(created_sequence, batch_data)
                 loss.backward()
 
-                # grad clipping -> caused cuda-error!
+                # grad clipping -> caused cuda-error
                 # nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
                 # upgrade gradients
