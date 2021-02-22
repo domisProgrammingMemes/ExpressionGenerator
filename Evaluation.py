@@ -8,7 +8,9 @@ import matplotlib.pyplot as plt
 fig = plt.figure()
 
 AUs = ["AU1L", "AU1R", "AU2L", "AU2R", "AU4L", "AU4R", "AU6L", "AU6R", "AU9", "AU10", "AU13L", "AU13R", "AU18", "AU22", "AU27"]
+AUs2 = ["AU1", "AU2", "AU4", "AU6", "AU9", "AU10", "AU13", "AU18", "AU22", "AU27"]
 y_indexes = np.arange(len(AUs))
+y_indexes2 = np.arange(len(AUs2))
 
 # =============================
 # first subplot: Ground Truth
@@ -42,8 +44,8 @@ AU27 = actionunit[15].values
 # Plot
 ax.plot(Frame, AU1L, 0, zdir="y", color="#ff4a47")
 ax.plot(Frame, AU1R, 1, zdir="y", color="#ff4a47")
-ax.plot(Frame, AU2R, 2, zdir="y", color="#fa8b2a")
 ax.plot(Frame, AU2L, 3, zdir="y", color="#fa8b2a")
+ax.plot(Frame, AU2R, 2, zdir="y", color="#fa8b2a")
 ax.plot(Frame, AU4L, 4, zdir="y", color="#d1ce00")
 ax.plot(Frame, AU4R, 5, zdir="y", color="#d1ce00")
 ax.plot(Frame, AU6L, 6, zdir="y", color="#6aff00")
@@ -82,6 +84,11 @@ data = pd.read_csv("./Data/Evaluation/i_testing/ExGen_i_testing_disgust2happy.cs
 for i in range(16):
     actionunit[i] = data.iloc[:duration, i]
 
+
+# short:
+array = [actionunit[i].values for i in range(0, 15)]
+
+
 Frame = data.iloc[:duration, 0]
 AU1L = actionunit[1].values
 AU1R = actionunit[2].values
@@ -100,32 +107,62 @@ AU22 = actionunit[14].values
 AU27 = actionunit[15].values
 
 
+# # Plot
+# ax.plot(Frame, AU1L, 0, zdir="y", color="#ff4a47")
+# ax.plot(Frame, AU1R, 1, zdir="y", color="#ff4a47")
+# ax.plot(Frame, AU2L, 3, zdir="y", color="#fa8b2a")
+# ax.plot(Frame, AU2R, 2, zdir="y", color="#fa8b2a")
+# ax.plot(Frame, AU4L, 4, zdir="y", color="#d1ce00")
+# ax.plot(Frame, AU4R, 5, zdir="y", color="#d1ce00")
+# ax.plot(Frame, AU6L, 6, zdir="y", color="#6aff00")
+# ax.plot(Frame, AU6R, 7, zdir="y", color="#6aff00")
+# ax.plot(Frame, AU9, 8, zdir="y", color="#00eeff")
+# ax.plot(Frame, AU10, 9, zdir="y", color="gray")
+# ax.plot(Frame, AU13L, 10, zdir="y", color="#a600ff")
+# ax.plot(Frame, AU13R, 11, zdir="y", color="#a600ff")
+# ax.plot(Frame, AU18, 12, zdir="y", color="black")
+# ax.plot(Frame, AU22, 13, zdir="y", color="#007bff")
+# ax.plot(Frame, AU27, 14, zdir="y", color="red")
+#
+# # Stuff
+# ax.set_title("GenEx: disgust to happy", y=.9, pad=0)
+# ax.set_xlabel("Frame")
+# ax.set_xlim(duration, 0)
+# ax.set_ylim(0, 15)
+# ax.set_yticks(ticks=y_indexes)
+# ax.set_yticklabels(AUs, rotation=270)
+# for ytick, color in zip(ax.get_yticklabels(), colors):
+#     ytick.set_color(color)
+# ax.set_zlabel("AU-Intensity")
+# ax.set_zlim(0, 1.25)
+
 # Plot
-ax.plot(Frame, AU1L, 0, zdir="y", color="#ff4a47")
-ax.plot(Frame, AU1R, 1, zdir="y", color="#ff4a47")
-ax.plot(Frame, AU2R, 2, zdir="y", color="#fa8b2a")
-ax.plot(Frame, AU2L, 3, zdir="y", color="#fa8b2a")
-ax.plot(Frame, AU4L, 4, zdir="y", color="#d1ce00")
-ax.plot(Frame, AU4R, 5, zdir="y", color="#d1ce00")
-ax.plot(Frame, AU6L, 6, zdir="y", color="#6aff00")
-ax.plot(Frame, AU6R, 7, zdir="y", color="#6aff00")
-ax.plot(Frame, AU9, 8, zdir="y", color="#00eeff")
-ax.plot(Frame, AU10, 9, zdir="y", color="gray")
-ax.plot(Frame, AU13L, 10, zdir="y", color="#a600ff")
-ax.plot(Frame, AU13R, 11, zdir="y", color="#a600ff")
-ax.plot(Frame, AU18, 12, zdir="y", color="black")
-ax.plot(Frame, AU22, 13, zdir="y", color="#007bff")
-ax.plot(Frame, AU27, 14, zdir="y", color="red")
+width = 0.00
+ax.plot(Frame, AU1L, 0-width, zdir="y", color="#ff4a47", linestyle="--")
+ax.plot(Frame, AU1R, 0+width, zdir="y", color="#ff4a47")
+ax.plot(Frame, AU2L, 1-width, zdir="y", color="#fa8b2a", linestyle="--")
+ax.plot(Frame, AU2R, 1+width, zdir="y", color="#fa8b2a")
+ax.plot(Frame, AU4L, 2-width, zdir="y", color="#d1ce00", linestyle="--")
+ax.plot(Frame, AU4R, 2+width, zdir="y", color="#d1ce00")
+ax.plot(Frame, AU6L, 3-width, zdir="y", color="#6aff00", linestyle="--")
+ax.plot(Frame, AU6R, 3+width, zdir="y", color="#6aff00")
+ax.plot(Frame, AU9, 4, zdir="y", color="#00eeff")
+ax.plot(Frame, AU10, 5, zdir="y", color="gray")
+ax.plot(Frame, AU13L, 6-width, zdir="y", color="#a600ff", linestyle="--")
+ax.plot(Frame, AU13R, 6+width, zdir="y", color="#a600ff")
+ax.plot(Frame, AU18, 7, zdir="y", color="black")
+ax.plot(Frame, AU22, 8, zdir="y", color="#007bff")
+ax.plot(Frame, AU27, 9, zdir="y", color="red")
 
-
-
+# Stuff
 ax.set_title("GenEx: disgust to happy", y=.9, pad=0)
 ax.set_xlabel("Frame")
 ax.set_xlim(duration, 0)
-ax.set_ylim(0, 15)
-ax.set_yticks(ticks=y_indexes)
-ax.set_yticklabels(AUs, rotation=270)
-for ytick, color in zip(ax.get_yticklabels(), colors):
+ax.set_ylim(min(y_indexes2), max(y_indexes2))
+ax.set_yticks(ticks=y_indexes2)
+ax.set_yticklabels(AUs2, rotation=270)
+colors2 = ["#ff4a47", "#fa8b2a", "#d1ce00", "#6aff00", "#00eeff", "gray", "#a600ff", "black", "#007bff", "red"]
+for ytick, color in zip(ax.get_yticklabels(), colors2):
     ytick.set_color(color)
 ax.set_zlabel("AU-Intensity")
 ax.set_zlim(0, 1.25)
@@ -143,3 +180,38 @@ mng.window.showMaximized()
 fig.subplots_adjust(top=0.995, bottom=0.015, left=0.002, right=0.98, hspace=0.2, wspace=0.011)
 plt.show()
 
+
+
+########################################
+# TESTING STUFF:
+# Data
+actionunit = {}
+data = pd.read_csv("./Data/Evaluation/i_testing/ExGen_i_testing_disgust2happy.csv")
+for i in range(16):
+    actionunit[i] = data.iloc[:duration, i]
+
+array = [actionunit[i].values for i in range(0, 16)]
+fig2 = plt.figure()
+ax2 = fig2.add_subplot(1, 1, 1, projection="3d")
+
+for i in range(1, 16):
+        ax2.plot(array[0], array[i], i-1, zdir="y", color=colors[i-1])
+
+
+# Stuff
+ax2.set_title("GenEx: disgust to happy", y=.9, pad=0)
+ax2.set_xlabel("Frame")
+ax2.set_xlim(duration, 0)
+ax2.set_ylim(min(y_indexes), max(y_indexes))
+ax2.set_yticks(ticks=y_indexes)
+ax2.set_yticklabels(AUs, rotation=270)
+for ytick, color in zip(ax2.get_yticklabels(), colors):
+    ytick.set_color(color)
+ax2.set_zlabel("AU-Intensity")
+ax2.set_zlim(0, 1.25)
+ax2.view_init(elev=4, azim=340)
+
+mng = plt.get_current_fig_manager()
+mng.window.showMaximized()
+fig2.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0.2, wspace=0.2)
+plt.show()
