@@ -63,17 +63,18 @@ def compare_two_sequences(GT_sequence: str, ExGen_sequence: str):
     ax.plot(Frame, AU27, 14, zdir="y", color="red")
     # Stuff
 
-    ax.set_title("GT: disgust to happy", y=.9, pad=0)
-    ax.set_xlabel("Frame")
+    ax.set_title("GT: disgust to happy", y=.9, pad=0, fontsize=15)
+    ax.set_xlabel("Frame", fontsize=14)
     ax.set_xlim(duration, 0)
     ax.set_ylim(0, 15)
     ax.set_yticks(ticks=y_indexes)
     ax.set_yticklabels(AUs, rotation=270)
     for ytick, color in zip(ax.get_yticklabels(), colors):
         ytick.set_color(color)
-    ax.set_zlabel("AU-Intensity")
+    ax.set_zlabel("AU-Intensity", fontsize=14)
     ax.set_zlim(0, 1.25)
     ax.view_init(elev=4, azim=340)
+    ax.tick_params(axis="both", labelsize=12)
 
     # ====================================
     # second subplot: Expression Generator
@@ -149,18 +150,19 @@ def compare_two_sequences(GT_sequence: str, ExGen_sequence: str):
     ax.plot(Frame, AU22, 8, zdir="y", color="#007bff")
     ax.plot(Frame, AU27, 9, zdir="y", color="red")
     # Stuff
-    ax.set_title("GenEx: disgust to happy", y=.9, pad=0)
-    ax.set_xlabel("Frame")
+    ax.set_title("GenEx: disgust to happy", y=.9, pad=0, fontsize=15)
+    ax.set_xlabel("Frame", fontsize=14)
     ax.set_xlim(duration, 0)
     ax.set_ylim(min(y_indexes_reduced), max(y_indexes_reduced))
     ax.set_yticks(ticks=y_indexes_reduced)
     ax.set_yticklabels(AUs_reduced, rotation=270)
     for ytick, color in zip(ax.get_yticklabels(), colors_reduced):
         ytick.set_color(color)
-    ax.set_zlabel("AU-Intensity")
+    ax.set_zlabel("AU-Intensity", fontsize=14)
     ax.set_zlim(0, 1.25)
     # color=("#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47")
     ax.view_init(elev=4, azim=340)
+    ax.tick_params(axis="both", labelsize=12)
     # ==========
     # show plots
     # ==========
@@ -185,17 +187,18 @@ def eval_one_sequence(sequence: str):
     for i in range(1, 16):
         ax2.plot(array[0], array[i], i - 1, zdir="y", color=colors[i - 1])
     # Stuff
-    ax2.set_title("GenEx: disgust to happy", y=.9, pad=0)
-    ax2.set_xlabel("Frame")
+    # ax2.set_title("GenEx: disgust to happy", y=.9, pad=0, fontsize=12)
+    ax2.set_xlabel("Frame", fontsize=16)
     ax2.set_xlim(duration, 0)
     ax2.set_ylim(min(y_indexes), max(y_indexes))
     ax2.set_yticks(ticks=y_indexes)
     ax2.set_yticklabels(AUs, rotation=270)
     for ytick, color in zip(ax2.get_yticklabels(), colors):
         ytick.set_color(color)
-    ax2.set_zlabel("AU-Intensity")
+    ax2.set_zlabel("AU-Intensity", fontsize=16)
     ax2.set_zlim(0, 1.25)
     ax2.view_init(elev=4, azim=340)
+    ax2.tick_params(axis="both", labelsize=13)
     mng = plt.get_current_fig_manager()
     mng.window.showMaximized()
     fig2.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0.2, wspace=0.2)
@@ -218,16 +221,23 @@ def plot_loss(path: str):
     ax.plot(MSE_val, label="MSE_val")
 
     ax.plot(100, 0.4654115445446223/25, ".", color="red", linewidth=0.5)
-    ax.annotate(text=f"{0.4654115445446223/25:.4f}", color="red", xy=(100, 0.4654115445446223/25), xytext=(93, 0.4654115445446223/25+0.002))
+    ax.annotate(text=f"{0.4654115445446223/25:.4f}", color="red", xy=(100, 0.4654115445446223/25), xytext=(93, 0.4654115445446223/25+0.002), fontsize=14)
+
+    ax.plot(200, 0.2358173221447418/25, ".", color="red", linewidth=0.5)
+    ax.annotate(text=f"{0.2358173221447418/25:.4f}", color="red", xy=(200, 0.2358173221447418/25), xytext=(193, 0.2358173221447418/25+0.002), fontsize=14)
 
     ax.plot(355, MSE_test, ".", color="red", label="MSE_test",  linewidth=0.5)
-    ax.annotate(text=f"{MSE_test:.4f}", color="red", xy=(355, MSE_test), xytext=(348, MSE_test+0.002))
+    ax.annotate(text=f"{MSE_test:.4f}", color="red", xy=(355, MSE_test), xytext=(348, MSE_test+0.002), fontsize=14)
 
     ax.set_xlim(0, 360)
-    ax.set_xlabel("Iteration")
-    ax.set_ylabel("Error")
-    ax.set_title("Durchschnittlicher MSE-Error pro Sequenz")
-    ax.legend()
+    ax.set_xlabel("Iteration", fontsize=16)
+    ax.tick_params(axis="both", labelsize=13)
+    ax.set_ylabel("Error", fontsize=16)
+    ax.set_ylim(0.00, 0.1)
+    ax.set_yticks(np.arange(0.01, 0.1, 0.01))
+    # ax.set_title("Durchschnittlicher MSE-Error pro Sequenz", fontsize=25)
+    ax.legend(fontsize=15)
+    ax.grid(True)
     # plt.show()
 
 
@@ -249,17 +259,19 @@ def plot_differences(GT: str, ExGen: str):
     for i in range(1, 16):
         ax.plot(array[0], array[i], i - 1, zdir="y", color=colors[i - 1])
     # Stuff
-    ax.set_title("Difference GT-ExGen: disgust to happy", y=.9, pad=0)
-    ax.set_xlabel("Frame")
+    # ax.set_title("Difference GT-ExGen: disgust to happy", y=.9, pad=0, fontsize=12)
+    ax.set_xlabel("Frame", fontsize=16, labelpad=10)
     ax.set_xlim(duration, 0)
     # ax.set_ylim()
-    # ax.set_yticks(ticks=y_indexes)
-    ax.set_yticklabels(AUs, rotation=270)
+    ax.set_yticks(ticks=y_indexes)
+    ax.set_yticklabels(AUs, rotation=290)
     for ytick, color in zip(ax.get_yticklabels(), colors):
         ytick.set_color(color)
-    ax.set_zlabel("AU-Intensity")
-    # ax.set_zlim(np.amin(array), np.amax(array))
-    ax.view_init(elev=4, azim=340)
+    ax.set_zlabel("AU-Intensity", fontsize=16, labelpad=10)
+    ax.set_zticks(np.arange(-1.25, 1.25, 0.25))
+    ax.set_zlim(-1.25, 1.25)
+    ax.view_init(elev=3, azim=355)
+    ax.tick_params(axis="both", labelsize=13)
     mng = plt.get_current_fig_manager()
     mng.window.showMaximized()
     fig.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0.2, wspace=0.2)
@@ -267,25 +279,53 @@ def plot_differences(GT: str, ExGen: str):
     # plt.show()
 
 
-def plot_differences_box(GT: str, ExGen: str):
-    # Data
+def plot_differences_box(GT: str, ExGen: str, ExGen2: str):
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+
     data = {}
+    data2 = {}
     GT_data = pd.read_csv(GT)
     ExGen_data = pd.read_csv(ExGen)
+    ExGen_data2 = pd.read_csv(ExGen2)
     duration = GT_data.iloc[-1, 0]
 
     data[0] = GT_data.iloc[:duration, 0]
     for i in range(1, 16):
         data[i] = GT_data.iloc[:duration, i] - ExGen_data.iloc[:duration, i]
     array = [data[i].values for i in range(0, 16)]
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
+
+    data2[0] = GT_data.iloc[:duration, 0]
+    for i in range(1, 16):
+        data2[i] = GT_data.iloc[:duration, i] - ExGen_data2.iloc[:duration, i]
+    array2 = [data2[i].values for i in range(0, 16)]
+
+    def set_box_color(bp, color):
+        plt.setp(bp['boxes'], color=color)
+        plt.setp(bp['whiskers'], color=color)
+        plt.setp(bp['caps'], color=color)
+        plt.setp(bp['medians'], color=color)
+
+    bpr = plt.boxplot(array2[1:], positions=np.array(range(len(array2[1:]))) * 2.0 + 0.4, sym='+', widths=0.6)
+    set_box_color(bpr, '#2C7BB6')
+    bpl = plt.boxplot(array[1:], positions=np.array(range(len(array[1:]))) * 2.0 - 0.4, sym='+', widths=0.6)
+    set_box_color(bpl, '#D7191C')
 
 
-    # for i in range(1, 16):
-    #     plt.plot(array[i])
-    plt.boxplot(array[1:])
-    ax.set_xticklabels(AUs)
+    # draw temporary red and blue lines and use them to create a legend
+    plt.plot([], c='#D7191C', label='within Dataset')
+    plt.plot([], c='#2C7BB6', label='Variation')
+    plt.legend()
+
+    plt.xticks(range(0, len(AUs) * 2, 2), AUs)
+    plt.xlim(-2, len(AUs) * 2)
+    plt.ylim(-1.25, 1.25, 0.25)
+    plt.yticks(np.arange(-1.25, 1.25, 0.25))
+    plt.tight_layout()
+    plt.grid(True)
+    # plt.savefig('boxcompare.png')
+
     # plt.show()
 
 
@@ -294,17 +334,21 @@ def plot_differences_box(GT: str, ExGen: str):
 # ==================================== #
 trainingshistory = "./history/history.txt"
 GT_seq = "Data/FaceTracker/preprocessed/csv/disgusthappy1_fill.csv"
-ExGen_seq = "./Data/Evaluation/i_testing/ExGen_i_testing_disgust2happy.csv"
+ExGen_seq_org = "./Data/Evaluation/i_testing/ExGen_i_testing_disgust2happy.csv"
+ExGen_seq_var = "./Data/Evaluation/i_testing/ExGen_i_i_testing_disgust2happy_var.csv"
+
+
+
 
 # Loss
-plot_loss(trainingshistory)
+# plot_loss(trainingshistory)
 
 
 # # Plot of difference? Some AUs or all?
-# plot_differences(GT_seq, ExGen_seq)
-# plot_differences_box(GT_seq, ExGen_seq)
-
-
+plot_differences(GT_seq, ExGen_seq_org)
+plot_differences_box(GT_seq, ExGen_seq_org, ExGen_seq_var)
+#
+#
 # # Sequences - which/how many?
 # compare_two_sequences(GT_seq, ExGen_seq)
 # eval_one_sequence(GT_seq)
