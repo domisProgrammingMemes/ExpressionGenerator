@@ -4,66 +4,78 @@ import numpy as np
 
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
-
+from matplotlib.gridspec import GridSpec
+from matplotlib.collections import PolyCollection
+from matplotlib import colors as mcolors
 
 AUs = ["AU1L", "AU1R", "AU2L", "AU2R", "AU4L", "AU4R", "AU6L", "AU6R", "AU9", "AU10", "AU13L", "AU13R", "AU18",
        "AU22", "AU27"]
 AUs_reduced = ["AU1", "AU2", "AU4", "AU6", "AU9", "AU10", "AU13", "AU18", "AU22", "AU27"]
-colors = ["#ff4a47", "#ff4a47", "#fa8b2a", "#fa8b2a", "#d1ce00", "#d1ce00", "#6aff00", "#6aff00", "#00eeff", "gray",
+colors = ["#ff4a47", "#ff4a47", "#fa8b2a", "#fa8b2a", "#d1ce00", "#d1ce00", "#279c00", "#279c00", "#00eeff", "gray",
           "#a600ff", "#a600ff", "black", "#007bff", "red"]
 colors_reduced = ["#ff4a47", "#fa8b2a", "#d1ce00", "#6aff00", "#00eeff", "gray", "#a600ff", "black", "#007bff", "red"]
 y_indexes = np.arange(len(AUs))
 y_indexes_reduced = np.arange(len(AUs_reduced))
 
 
-def compare_two_sequences(GT_sequence: str, ExGen_sequence: str):
+def compare_two_sequences(GT: str, ExGen: str):
+
     fig = plt.figure()
+
+    data = {}
+    data2 = {}
+    GT_data = pd.read_csv(GT)
+    ExGen_data = pd.read_csv(ExGen)
+    duration = GT_data.iloc[-1, 0]
+
+    # ====
+    # Data
+    # ====
+    data[0] = GT_data.iloc[:duration, 0]
+    for i in range(1, 16):
+        data[i] = GT_data.iloc[:duration, i]
+
+    array = [data[i].values for i in range(0, 16)]
+
+    data2[0] = data[0]
+    # data2[0] = GT_data.iloc[:duration, 0]
+    for i in range(1, 16):
+        data2[i] = ExGen_data.iloc[:duration, i]
+
+    array2 = [data2[i].values for i in range(0, 16)]
+
+
+    gs = GridSpec(1, 2, figure=fig)
+
     # ===========================
     # first subplot: Ground Truth
     # ===========================
-    ax = fig.add_subplot(1, 2, 1, projection="3d")
-    # Data
-    data = {}
-    df = pd.read_csv(GT_sequence)
-    print(df.columns)
-    duration = df.iloc[-1, 0]
-    for i in range(16):
-        data[i] = df.iloc[:duration, i]
-    Frame = data[0].values
-    AU1L = data[1].values
-    AU1R = data[2].values
-    AU2L = data[3].values
-    AU2R = data[4].values
-    AU4L = data[5].values
-    AU4R = data[6].values
-    AU6L = data[7].values
-    AU6R = data[8].values
-    AU9 = data[9].values
-    AU10 = data[10].values
-    AU13L = data[11].values
-    AU13R = data[12].values
-    AU18 = data[13].values
-    AU22 = data[14].values
-    AU27 = data[15].values
-    # Plot
-    ax.plot(Frame, AU1L, 0, zdir="y", color="#ff4a47")
-    ax.plot(Frame, AU1R, 1, zdir="y", color="#ff4a47")
-    ax.plot(Frame, AU2L, 3, zdir="y", color="#fa8b2a")
-    ax.plot(Frame, AU2R, 2, zdir="y", color="#fa8b2a")
-    ax.plot(Frame, AU4L, 4, zdir="y", color="#d1ce00")
-    ax.plot(Frame, AU4R, 5, zdir="y", color="#d1ce00")
-    ax.plot(Frame, AU6L, 6, zdir="y", color="#6aff00")
-    ax.plot(Frame, AU6R, 7, zdir="y", color="#6aff00")
-    ax.plot(Frame, AU9, 8, zdir="y", color="#00eeff")
-    ax.plot(Frame, AU10, 9, zdir="y", color="gray")
-    ax.plot(Frame, AU13L, 10, zdir="y", color="#a600ff")
-    ax.plot(Frame, AU13R, 11, zdir="y", color="#a600ff")
-    ax.plot(Frame, AU18, 12, zdir="y", color="black")
-    ax.plot(Frame, AU22, 13, zdir="y", color="#007bff")
-    ax.plot(Frame, AU27, 14, zdir="y", color="red")
-    # Stuff
+    ax = fig.add_subplot(gs[0, 0], projection="3d")
+    for i in range(1, 16):
+        ax.plot(array[0], array[i], i - 1, zdir="y", color=colors[i - 1])
 
-    ax.set_title("GT: disgust to happy", y=.9, pad=0, fontsize=15)
+    ax.set_title("GT: disgust to happy", y=.84, pad=0, fontsize=15)
+    ax.set_xlabel("Frame", fontsize=14)
+    ax.set_xlim(duration, 0)
+    ax.set_ylim(0, 15)
+    ax.set_yticks(ticks=y_indexes)
+    ax.set_yticklabels(AUs, rotation=270)
+    for ytick, color in zip(ax.get_yticklabels(), colors):
+        ytick.set_color(color)
+
+    ax.set_zlabel("AU-Intensity", fontsize=14)
+    ax.set_zlim(0, 1.25)
+    ax.view_init(elev=4, azim=340)
+    ax.tick_params(axis="both", labelsize=12)
+
+    # ====================================
+    # second subplot: Expression Generator
+    # ====================================
+    ax = fig.add_subplot(gs[0, 1], projection="3d")
+    for i in range(1, 16):
+        ax.plot(array2[0], array2[i], i - 1, zdir="y", color=colors[i - 1])
+
+    ax.set_title("ExGen: disgust to happy", y=.84, pad=0, fontsize=15)
     ax.set_xlabel("Frame", fontsize=14)
     ax.set_xlim(duration, 0)
     ax.set_ylim(0, 15)
@@ -76,104 +88,73 @@ def compare_two_sequences(GT_sequence: str, ExGen_sequence: str):
     ax.view_init(elev=4, azim=340)
     ax.tick_params(axis="both", labelsize=12)
 
+
+    fig.subplots_adjust(top=0.985,
+                        bottom=0.015,
+                        left=0.008,
+                        right=0.991,
+                        hspace=0.2,
+                        wspace=0.018)
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized()
+
     # ====================================
-    # second subplot: Expression Generator
+    # third plot: 2 in 1
     # ====================================
-    ax = fig.add_subplot(1, 2, 2, projection="3d")
-    # Data
-    data = {}
-    df = pd.read_csv(ExGen_sequence)
-    print(df.columns)
-    for i in range(16):
-        data[i] = df.iloc[:duration, i]
-    # short:
-    # array = [data[i].values for i in range(0, 15)]
-    Frame = df.iloc[:duration, 0]
-    AU1L = data[1].values
-    AU1R = data[2].values
-    AU2L = data[3].values
-    AU2R = data[4].values
-    AU4L = data[5].values
-    AU4R = data[6].values
-    AU6L = data[7].values
-    AU6R = data[8].values
-    AU9 = data[9].values
-    AU10 = data[10].values
-    AU13L = data[11].values
-    AU13R = data[12].values
-    AU18 = data[13].values
-    AU22 = data[14].values
-    AU27 = data[15].values
-    # # Plot
-    # ax.plot(Frame, AU1L, 0, zdir="y", color="#ff4a47")
-    # ax.plot(Frame, AU1R, 1, zdir="y", color="#ff4a47")
-    # ax.plot(Frame, AU2L, 3, zdir="y", color="#fa8b2a")
-    # ax.plot(Frame, AU2R, 2, zdir="y", color="#fa8b2a")
-    # ax.plot(Frame, AU4L, 4, zdir="y", color="#d1ce00")
-    # ax.plot(Frame, AU4R, 5, zdir="y", color="#d1ce00")
-    # ax.plot(Frame, AU6L, 6, zdir="y", color="#6aff00")
-    # ax.plot(Frame, AU6R, 7, zdir="y", color="#6aff00")
-    # ax.plot(Frame, AU9, 8, zdir="y", color="#00eeff")
-    # ax.plot(Frame, AU10, 9, zdir="y", color="gray")
-    # ax.plot(Frame, AU13L, 10, zdir="y", color="#a600ff")
-    # ax.plot(Frame, AU13R, 11, zdir="y", color="#a600ff")
-    # ax.plot(Frame, AU18, 12, zdir="y", color="black")
-    # ax.plot(Frame, AU22, 13, zdir="y", color="#007bff")
-    # ax.plot(Frame, AU27, 14, zdir="y", color="red")
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    width = 0.0
+    for i in range(1, 16):
+        ax.plot(array[0], array[i], i - 1 + width, zdir="y", color=colors[i - 1], linestyle="--")
+        ax.plot(array2[0], array2[i], i - 1, zdir="y", color=colors[i - 1])
+        ax.add_collection3d(plt.fill_between(array[0], array[i], array2[i], color=colors[i-1], alpha=0.1), zs=i-1, zdir='y')
+
+    # def polygon_under_graph(xlist, ylist):
+    #     """
+    #     Construct the vertex list which defines the polygon filling the space under
+    #     the (xlist, ylist) line graph.  Assumes the xs are in ascending order.
+    #     """
+    #     return [(xlist[0], 0.), *zip(xlist, ylist), (xlist[-1], 0.)]
     #
-    # # Stuff
-    # ax.set_title("GenEx: disgust to happy", y=.9, pad=0)
-    # ax.set_xlabel("Frame")
-    # ax.set_xlim(duration, 0)
-    # ax.set_ylim(0, 15)
-    # ax.set_yticks(ticks=y_indexes)
-    # ax.set_yticklabels(AUs, rotation=270)
-    # for ytick, color in zip(ax.get_yticklabels(), colors):
-    #     ytick.set_color(color)
-    # ax.set_zlabel("AU-Intensity")
-    # ax.set_zlim(0, 1.25)
-    # Plot
-    width = 0.00
-    ax.plot(Frame, AU1L, 0 - width, zdir="y", color="#ff4a47", linestyle="--")
-    ax.plot(Frame, AU1R, 0 + width, zdir="y", color="#ff4a47")
-    ax.plot(Frame, AU2L, 1 - width, zdir="y", color="#fa8b2a", linestyle="--")
-    ax.plot(Frame, AU2R, 1 + width, zdir="y", color="#fa8b2a")
-    ax.plot(Frame, AU4L, 2 - width, zdir="y", color="#d1ce00", linestyle="--")
-    ax.plot(Frame, AU4R, 2 + width, zdir="y", color="#d1ce00")
-    ax.plot(Frame, AU6L, 3 - width, zdir="y", color="#6aff00", linestyle="--")
-    ax.plot(Frame, AU6R, 3 + width, zdir="y", color="#6aff00")
-    ax.plot(Frame, AU9, 4, zdir="y", color="#00eeff")
-    ax.plot(Frame, AU10, 5, zdir="y", color="gray")
-    ax.plot(Frame, AU13L, 6 - width, zdir="y", color="#a600ff", linestyle="--")
-    ax.plot(Frame, AU13R, 6 + width, zdir="y", color="#a600ff")
-    ax.plot(Frame, AU18, 7, zdir="y", color="black")
-    ax.plot(Frame, AU22, 8, zdir="y", color="#007bff")
-    ax.plot(Frame, AU27, 9, zdir="y", color="red")
-    # Stuff
-    ax.set_title("GenEx: disgust to happy", y=.9, pad=0, fontsize=15)
+    # # Make verts a list, verts[i] will be a list of (x,y) pairs defining polygon i
+    # verts = []
+    #
+    # zs = range(0, 15)
+    #
+    # for i in zs:
+    #     verts.append(polygon_under_graph(array[0], array2[i+1]))
+    #
+    # poly = PolyCollection(verts, facecolors=colors, alpha=.6)
+    # ax.add_collection3d(poly, zs=zs, zdir='y')
+
+
+
+
+
+    ax.set_title("Comparison", y=.86, pad=0, fontsize=15)
     ax.set_xlabel("Frame", fontsize=14)
     ax.set_xlim(duration, 0)
-    ax.set_ylim(min(y_indexes_reduced), max(y_indexes_reduced))
-    ax.set_yticks(ticks=y_indexes_reduced)
-    ax.set_yticklabels(AUs_reduced, rotation=270)
-    for ytick, color in zip(ax.get_yticklabels(), colors_reduced):
+    ax.set_ylim(0, 15)
+    ax.set_yticks(ticks=y_indexes)
+    ax.set_yticklabels(AUs, rotation=270)
+    for ytick, color in zip(ax.get_yticklabels(), colors):
         ytick.set_color(color)
     ax.set_zlabel("AU-Intensity", fontsize=14)
     ax.set_zlim(0, 1.25)
-    # color=("#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47", "#ff4a47")
-    ax.view_init(elev=4, azim=340)
+    ax.view_init(elev=6, azim=350)
     ax.tick_params(axis="both", labelsize=12)
+    fig.subplots_adjust(top=1, bottom=0.0, left=0.0, right=1.0, hspace=0, wspace=0)
+
     # ==========
     # show plots
     # ==========
     mng = plt.get_current_fig_manager()
     mng.window.showMaximized()
-    fig.subplots_adjust(top=0.995, bottom=0.015, left=0.002, right=0.98, hspace=0.2, wspace=0.011)
-    # plt.show()
 
 
-########################################
-# TESTING STUFF:
+###############
+# TESTING STUFF
+###############
 def eval_one_sequence(sequence: str):
     # Data
     data = {}
@@ -182,6 +163,7 @@ def eval_one_sequence(sequence: str):
     for i in range(16):
         data[i] = df.iloc[:duration, i]
     array = [data[i].values for i in range(0, 16)]
+
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(1, 1, 1, projection="3d")
     for i in range(1, 16):
@@ -205,7 +187,9 @@ def eval_one_sequence(sequence: str):
     # plt.show()
 
 
-
+##################
+# 2D Loss Function
+##################
 def plot_loss(path: str):
     df = pd.read_csv(path, delimiter="\t")
     # print(df.head(7))
@@ -241,21 +225,25 @@ def plot_loss(path: str):
     # plt.show()
 
 
-def plot_differences(GT: str, ExGen: str):
-    # Data
+def plot_differences(GT: str, ExGen: str, ExGen2: str):
+
+    fig = plt.figure()
+
     data = {}
+    data2 = {}
     GT_data = pd.read_csv(GT)
     ExGen_data = pd.read_csv(ExGen)
+    ExGen_data2 = pd.read_csv(ExGen2)
     duration = GT_data.iloc[-1, 0]
 
+    # ###########
+    # First Plot
     data[0] = GT_data.iloc[:duration, 0]
     for i in range(1, 16):
         data[i] = GT_data.iloc[:duration, i] - ExGen_data.iloc[:duration, i]
     array = [data[i].values for i in range(0, 16)]
 
-
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1, projection="3d")
+    ax = fig.add_subplot(1, 2, 1, projection="3d")
     for i in range(1, 16):
         ax.plot(array[0], array[i], i - 1, zdir="y", color=colors[i - 1])
     # Stuff
@@ -272,10 +260,44 @@ def plot_differences(GT: str, ExGen: str):
     ax.set_zlim(-1.25, 1.25)
     ax.view_init(elev=3, azim=355)
     ax.tick_params(axis="both", labelsize=13)
+    ax.set_title("Difference GT - ExGen: Animation in DS", y=.83, pad=0, fontsize=15)
+
+    # fig.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0.2, wspace=0.2)
+
+    # ###########
+    # Second Plot
+    data2[0] = GT_data.iloc[:duration, 0]
+    for i in range(1, 16):
+        data2[i] = GT_data.iloc[:duration, i] - ExGen_data2.iloc[:duration, i]
+    array2 = [data2[i].values for i in range(0, 16)]
+
+    ax = fig.add_subplot(1, 2, 2, projection="3d")
+    for i in range(1, 16):
+        ax.plot(array2[0], array2[i], i - 1, zdir="y", color=colors[i - 1])
+    # Stuff
+    # ax.set_title("Difference GT-ExGen: disgust to happy", y=.9, pad=0, fontsize=12)
+    ax.set_xlabel("Frame", fontsize=16, labelpad=10)
+    ax.set_xlim(duration, 0)
+    # ax.set_ylim()
+    ax.set_yticks(ticks=y_indexes)
+    ax.set_yticklabels(AUs, rotation=290)
+    for ytick, color in zip(ax.get_yticklabels(), colors):
+        ytick.set_color(color)
+    ax.set_zlabel("AU-Intensity", fontsize=16, labelpad=10)
+    ax.set_zticks(np.arange(-1.25, 1.25, 0.25))
+    ax.set_zlim(-1.25, 1.25)
+    ax.view_init(elev=3, azim=355)
+    ax.tick_params(axis="both", labelsize=13)
+    ax.set_title("Difference GT - ExGen: Animation not in DS", y=.83, pad=0, fontsize=15)
+
+    fig.subplots_adjust(top=0.985,
+                        bottom=0.015,
+                        left=0.008,
+                        right=0.992,
+                        hspace=0.2,
+                        wspace=0.0)
     mng = plt.get_current_fig_manager()
     mng.window.showMaximized()
-    fig.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0.2, wspace=0.2)
-
     # plt.show()
 
 
@@ -301,30 +323,38 @@ def plot_differences_box(GT: str, ExGen: str, ExGen2: str):
         data2[i] = GT_data.iloc[:duration, i] - ExGen_data2.iloc[:duration, i]
     array2 = [data2[i].values for i in range(0, 16)]
 
-    def set_box_color(bp, color):
+    def set_box_color(bp, color, median):
         plt.setp(bp['boxes'], color=color)
         plt.setp(bp['whiskers'], color=color)
         plt.setp(bp['caps'], color=color)
-        plt.setp(bp['medians'], color=color)
+        plt.setp(bp['medians'], color=median, linestyle="--", linewidth=2.0)
 
-    bpr = plt.boxplot(array2[1:], positions=np.array(range(len(array2[1:]))) * 2.0 + 0.4, sym='+', widths=0.6)
-    set_box_color(bpr, '#2C7BB6')
-    bpl = plt.boxplot(array[1:], positions=np.array(range(len(array[1:]))) * 2.0 - 0.4, sym='+', widths=0.6)
-    set_box_color(bpl, '#D7191C')
 
+    bpl = plt.boxplot(array[1:], positions=np.array(range(len(array[1:]))) * 2.0 - 0.39, sym='', widths=0.72)
+    set_box_color(bpl, '#5e84ff', "#000000")
+    bpr = plt.boxplot(array2[1:], positions=np.array(range(len(array2[1:]))) * 2.0 + 0.39, sym='', widths=0.72)
+    set_box_color(bpr, '#ff4f4f', "#000000")
 
     # draw temporary red and blue lines and use them to create a legend
-    plt.plot([], c='#D7191C', label='within Dataset')
-    plt.plot([], c='#2C7BB6', label='Variation')
-    plt.legend()
+    plt.plot([], c='#2747b0', label='Animation im Datensatz')
+    plt.plot([], c='#a62d2d', label='Animation nicht im Datensatz')
+    plt.legend(fontsize=15)
 
-    plt.xticks(range(0, len(AUs) * 2, 2), AUs)
+
+    plt.xticks(range(0, len(AUs) * 2, 2), AUs, fontsize=13)
     plt.xlim(-2, len(AUs) * 2)
-    plt.ylim(-1.25, 1.25, 0.25)
-    plt.yticks(np.arange(-1.25, 1.25, 0.25))
-    plt.tight_layout()
-    plt.grid(True)
+    plt.ylim(-0.6, 0.6, 0.1)
+    plt.yticks(np.arange(-0.5, 0.6, 0.1), fontsize=12)
+    plt.grid(linestyle="dotted")
     # plt.savefig('boxcompare.png')
+    plt.xlabel("Action Unit", fontsize=16)
+    plt.ylabel("Abweichung zur Grundwahrheit", fontsize=16)
+
+    plt.axhspan(-0.1, 0.1, facecolor='green', alpha=0.2)
+    plt.axhspan(-0.2, -0.1, facecolor='#ffd059', alpha=0.2)
+    plt.axhspan(0.2, 0.1, facecolor='#ffd059', alpha=0.2)
+    plt.text(-1.8, 0.08, r"Abweichung nicht wahrnehmbar", fontsize=9, color="green", alpha=0.6)
+    plt.text(-1.8, 0.18, r"Abweichung kaum wahrnehmbar", fontsize=9, color="#d99c00", alpha=1)
 
     # plt.show()
 
@@ -333,24 +363,54 @@ def plot_differences_box(GT: str, ExGen: str, ExGen2: str):
 # =============== DATA =============== #
 # ==================================== #
 trainingshistory = "./history/history.txt"
-GT_seq = "Data/FaceTracker/preprocessed/csv/disgusthappy1_fill.csv"
-ExGen_seq_org = "./Data/Evaluation/i_testing/ExGen_i_testing_disgust2happy.csv"
-ExGen_seq_var = "./Data/Evaluation/i_testing/ExGen_i_i_testing_disgust2happy_var.csv"
+
+# Groundtruth (always in DS ofc)
+GT_disgusthappy5 = "Data/FaceTracker/preprocessed/csv/disgusthappy5_fill.csv"
+GT_frownneutral5 = "Data/FaceTracker/preprocessed/csv/frownneutral5_fill.csv"
+
+# Modell a)
 
 
+# Modell b)
 
+
+# Modell c)
+
+
+# Modell d)
+
+
+# Modell e)
+
+
+# Modell f)
+
+
+# Modell g)
+
+
+# Modell h)
+
+
+# Modell i)
+i_disgusthappy5 = "./Data/Evaluation/i_testing/ExGen_i_testing_disgust2happy5_org.csv"
+i_disgusthappy_v = "./Data/Evaluation/i_testing/ExGen_i_testing_disgust2happy_var.csv"
+
+i_frownneutral5 = "./Data/Evaluation/i_testing/ExGen_i_testing_frown2neutral5_org.csv"
+i_frownneutral_v = "./Data/Evaluation/i_testing/ExGen_i_testing_frown2neutral_var_bad_indataset.csv"
+
+# ==================================== #
+# ============ Functions ============= #
+# ==================================== #
 
 # Loss
 # plot_loss(trainingshistory)
 
+# ### Sequences ###
+# compare_two_sequences(GT_disgusthappy5, i_disgusthappy5)
+# eval_one_sequence(i_disgusthappy5)
 
-# # Plot of difference? Some AUs or all?
-plot_differences(GT_seq, ExGen_seq_org)
-plot_differences_box(GT_seq, ExGen_seq_org, ExGen_seq_var)
-#
-#
-# # Sequences - which/how many?
-# compare_two_sequences(GT_seq, ExGen_seq)
-# eval_one_sequence(GT_seq)
-
+# ### Plot of difference ###
+# plot_differences(GT_disgusthappy5, i_disgusthappy5, i_disgusthappy_v)
+# plot_differences_box(GT_disgusthappy5, i_disgusthappy5, i_disgusthappy_v)
 plt.show()
